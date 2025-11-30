@@ -1,1 +1,115 @@
-/* Placeholder: Styles will be added here */
+/* Base layout: mobile-first, center everything vertically and horizontally */
+:root {
+  --bg: #f7f7f8;
+  --text: #1f2933;
+  --muted: #6b7280;
+  --primary: #2563eb;
+  --primary-strong: #1d4ed8;
+  --success: #16a34a;
+  --error: #dc2626;
+  --shadow-strong: 0 14px 35px rgba(0, 0, 0, 0.22);
+  --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --button-radius: 999px;
+  --spacing: 20px;
+  --max-button-width: 360px;
+}
+
+/* Normalize basics for consistent typography and background */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+/* Flex container to center content both vertically and horizontally */
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Wrapper to constrain width and provide breathing room */
+.app {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--spacing);
+  text-align: center;
+}
+
+/* Title styling */
+.app-title {
+  margin: 0 0 18px;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Shared button styles: full-width on mobile with a comfortable tap target */
+.go-button {
+  width: 100%;
+  max-width: var(--max-button-width);
+  min-height: 88px;
+  padding: 18px 26px;
+  border: none;
+  border-radius: var(--button-radius);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #fff;
+  cursor: pointer;
+  background: var(--primary);
+  box-shadow: var(--shadow-strong);
+  transition: transform 120ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+/* Hover/active affordances for capable devices */
+@media (hover: hover) {
+  .go-button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-strong), var(--shadow-soft);
+  }
+
+  .go-button:active:not(:disabled) {
+    transform: translateY(1px);
+    box-shadow: var(--shadow-soft);
+  }
+}
+
+/* Disabled state: dimmed with no shadow */
+.go-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  box-shadow: none;
+  background: var(--muted);
+}
+
+/* Button state modifiers for clear visual feedback */
+.go-button--requesting,
+.go-button--sending {
+  background: var(--primary);
+}
+
+.go-button--success {
+  background: var(--success);
+}
+
+.go-button--error {
+  background: var(--error);
+}
+
+/* Status text: reserved height to prevent layout shift */
+.status {
+  margin-top: 14px;
+  min-height: 22px;
+  font-size: 14px;
+  color: var(--muted);
+}
