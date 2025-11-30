@@ -9,7 +9,8 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 
 app = Flask(__name__, static_folder="static", static_url_path="")
-app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///:memory:")
+_default_db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "greenlights.db")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", f"sqlite:///{_default_db_path}")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
 
