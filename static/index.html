@@ -1,14 +1,19 @@
 <!doctype html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0bcd3a">
   <link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/styles.css">
-  <title>PWA Placeholder</title>
+  <title>Зелёный Светофор</title>
+  <script src="/main.js" defer></script>
 </head>
 <body>
-  <!-- Placeholder: Main content will be implemented here -->
-  <script src="/main.js"></script>
+  <main>
+    <h1>Зелёный Светофор</h1>
+    <button id="go-button" aria-label="Отправить сигнал о зелёном светофоре">Поехали</button>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </main>
 </body>
 </html>
