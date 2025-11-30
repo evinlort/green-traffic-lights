@@ -111,6 +111,11 @@ def _haversine_distance_meters(lat1: float, lon1: float, lat2: float, lon2: floa
     d_lambda = math.radians(lon2 - lon1)
 
     a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    # Numerical imprecision can push "a" slightly outside the valid [0, 1] range,
+    # causing a domain error in the square root when subtracting from 1. Clamp to
+    # the expected bounds to keep the calculation stable.
+    a = min(1.0, max(0.0, a))
+
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
     return radius_m * c
