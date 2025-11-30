@@ -1,21 +1,38 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 from typing import Any, Optional
 
 from flask import Flask, jsonify, request, send_from_directory
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import func
 
 app = Flask(__name__, static_folder="static", static_url_path="")
+app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///:memory:")
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+db = SQLAlchemy(app)
+
+
+class ClickEvent(db.Model):
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    lat = db.Column(db.Float, nullable=False)
+    lon = db.Column(db.Float, nullable=False)
+    speed = db.Column(db.Float, nullable=True)
+    timestamp = db.Column(db.DateTime(timezone=True), nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+with app.app_context():
+    db.create_all()
 
 
 def save_click_to_db(lat: float, lon: float, speed: Optional[float], timestamp: datetime) -> None:
-    """Stub to persist click data to a database.
+    """Persist click data to the configured database."""
 
-    For now, this simply logs the provided values. Replace with actual
-    persistence logic when integrating a real datastore.
-    """
-
-    print(f"Saving click: lat={lat}, lon={lon}, speed={speed}, timestamp={timestamp.isoformat()}")
+    click_event = ClickEvent(lat=lat, lon=lon, speed=speed, timestamp=timestamp)
+    db.session.add(click_event)
+    db.session.commit()
 
 
 @app.route("/")
