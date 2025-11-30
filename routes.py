@@ -35,7 +35,7 @@ def api_click() -> Any:
         return jsonify({"error": "Missing required fields"}), 400
 
     required_fields = ("lat", "lon", "timestamp")
-    if not all(field in data for field in required_fields):
+    if any(field not in data for field in required_fields):
         return jsonify({"error": "Missing required fields"}), 400
 
     try:
