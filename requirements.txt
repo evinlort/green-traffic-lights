@@ -3,3 +3,4 @@ Flask-SQLAlchemy==3.1.1  # Integration of SQLAlchemy ORM with Flask
 SQLAlchemy==2.0.30  # Database ORM and core SQL toolkit
 psycopg2-binary==2.9.9  # PostgreSQL database driver
 gunicorn==21.2.0  # Production-grade WSGI HTTP server for running the app
+cryptography
