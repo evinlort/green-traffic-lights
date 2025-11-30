@@ -7,8 +7,10 @@
   --primary-strong: #1d4ed8;
   --success: #16a34a;
   --error: #dc2626;
-  --shadow-strong: 0 14px 35px rgba(0, 0, 0, 0.22);
-  --shadow-soft: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-strong: 0 18px 35px rgba(0, 0, 0, 0.22);
+  --shadow-soft: 0 6px 16px rgba(0, 0, 0, 0.16);
+  --shadow-inset: inset 0 2px 4px rgba(255, 255, 255, 0.22),
+    inset 0 -6px 12px rgba(0, 0, 0, 0.22);
   --button-radius: 999px;
   --spacing: 20px;
   --max-button-width: 360px;
@@ -37,51 +39,80 @@ body {
   justify-content: center;
 }
 
-/* Wrapper to constrain width and provide breathing room */
+/* Wrapper to center content in the viewport */
 .app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing);
   width: 100%;
-  max-width: 420px;
+  min-height: 100vh;
   padding: var(--spacing);
   text-align: center;
 }
 
 /* Title styling */
 .app-title {
-  margin: 0 0 18px;
+  margin: 0;
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-/* Shared button styles: full-width on mobile with a comfortable tap target */
+/* Shared button styles: circular, centered, and sized to a third of the viewport */
 .go-button {
-  width: 100%;
-  max-width: var(--max-button-width);
-  min-height: 88px;
-  padding: 18px 26px;
+  display: grid;
+  place-items: center;
+  width: 33vmin;
+  height: 33vmin;
   border: none;
-  border-radius: var(--button-radius);
-  font-size: 18px;
+  max-width: var(--max-button-width);
+  max-height: var(--max-button-width);
+  min-width: 220px;
+  min-height: 220px;
+  border-radius: 50%;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #fff;
   cursor: pointer;
-  background: var(--primary);
-  box-shadow: var(--shadow-strong);
-  transition: transform 120ms ease, box-shadow 160ms ease, background-color 160ms ease;
+  background: radial-gradient(circle at 30% 30%, #8ef3b2, #10b15d 45%, #0c9a4f 70%, #087a3e);
+  box-shadow: 0 10px 0 #0a6d37, var(--shadow-strong), var(--shadow-inset);
+  transition: transform 140ms ease, box-shadow 180ms ease, background-color 180ms ease,
+    filter 180ms ease;
+  position: relative;
+  isolation: isolate;
+}
+
+.go-button::after {
+  content: "";
+  position: absolute;
+  inset: 10% 14%;
+  border-radius: 50%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0));
+  pointer-events: none;
+  filter: blur(1px);
+  opacity: 0.95;
 }
 
 /* Hover/active affordances for capable devices */
 @media (hover: hover) {
   .go-button:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-strong), var(--shadow-soft);
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 12px 0 #0a6d37, var(--shadow-strong), var(--shadow-soft);
+    filter: saturate(1.05);
   }
 
   .go-button:active:not(:disabled) {
-    transform: translateY(1px);
-    box-shadow: var(--shadow-soft);
+    transform: translateY(4px) scale(0.99);
+    box-shadow: 0 4px 0 #0a6d37, var(--shadow-soft), var(--shadow-inset);
   }
+}
+
+.go-button:focus-visible {
+  outline: none;
+  box-shadow: 0 12px 0 #0a6d37, 0 0 0 6px rgba(46, 204, 113, 0.25), var(--shadow-strong);
 }
 
 /* Disabled state: dimmed with no shadow */
@@ -95,15 +126,20 @@ body {
 /* Button state modifiers for clear visual feedback */
 .go-button--requesting,
 .go-button--sending {
-  background: var(--primary);
+  background: radial-gradient(circle at 30% 30%, #8fb9ff, #3b82f6 50%, #2563eb 70%, #1e40af);
 }
 
 .go-button--success {
-  background: var(--success);
+  background: radial-gradient(circle at 30% 30%, #b6f7d3, #22c55e 50%, #16a34a 70%, #0f7638);
 }
 
 .go-button--error {
-  background: var(--error);
+  background: radial-gradient(circle at 30% 30%, #ffb6b6, #ef4444 50%, #dc2626 70%, #991b1b);
+}
+
+.go-button:active:not(:disabled) {
+  transform: translateY(4px) scale(0.99);
+  box-shadow: 0 4px 0 #0a6d37, var(--shadow-soft), var(--shadow-inset);
 }
 
 /* Status text: reserved height to prevent layout shift */
