@@ -1,12 +1,115 @@
-document.addEventListener("DOMContentLoaded", () => {
-  const goButton = document.getElementById("go-button");
-  const status = document.getElementById("status");
+const STATES = [
+  'requesting',
+  'sending',
+  'success',
+  'error',
+];
 
-  if (!goButton || !status) return;
+const button = document.getElementById('go-button');
+const statusEl = document.getElementById('status');
 
-  goButton.addEventListener("click", () => {
-    status.textContent = "Поехали! Сигнал отправлен.";
-    goButton.classList.remove("go-button--error");
-    goButton.classList.add("go-button--success");
+function setDisabled(flag) {
+  if (button) {
+    button.disabled = !!flag;
+  }
+}
+
+function setStatus(text = '', state = null) {
+  if (statusEl) {
+    statusEl.textContent = text;
+  }
+
+  if (!button) return;
+
+  button.classList.add('go-button');
+  STATES.forEach((s) => button.classList.remove(`go-button--${s}`));
+
+  if (state && STATES.includes(state)) {
+    button.classList.add(`go-button--${state}`);
+  }
+}
+
+function handleGeolocationError(error) {
+  let message = 'Не удалось получить геолокацию. Попробуйте ещё раз.';
+
+  if (error.code === error.PERMISSION_DENIED) {
+    message = 'Доступ к геолокации запрещён. Разрешите доступ в настройках браузера.';
+  } else if (error.code === error.POSITION_UNAVAILABLE) {
+    message = 'Сервис геолокации недоступен. Проверьте подключение или настройки.';
+  } else if (error.code === error.TIMEOUT) {
+    message = 'Запрос геолокации завершился по таймауту. Попробуйте снова.';
+  }
+
+  setStatus(message, 'error');
+  setDisabled(false);
+}
+
+async function sendPayload(payload) {
+  setStatus('Отправляем данные…', 'sending');
+
+  try {
+    const response = await fetch('/api/click', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    await response.json();
+    setStatus('Сигнал отправлен! Спасибо.', 'success');
+  } catch (err) {
+    console.error('Ошибка при отправке данных', err);
+    setStatus('Не удалось отправить данные. Попробуйте ещё раз.', 'error');
+  } finally {
+    setDisabled(false);
+  }
+}
+
+function handleSuccess(position) {
+  const { latitude: lat, longitude: lon, speed } = position.coords;
+  const speedKmh = Number.isFinite(speed) ? speed * 3.6 : null;
+
+  const payload = {
+    lat,
+    lon,
+    speed: speedKmh,
+    timestamp: new Date().toISOString(),
+  };
+
+  sendPayload(payload);
+}
+
+function handleClick() {
+  if (!navigator.geolocation) {
+    setStatus('Ваш браузер не поддерживает геолокацию.', 'error');
+    return;
+  }
+
+  setDisabled(true);
+  setStatus('Запрашиваем геолокацию…', 'requesting');
+
+  navigator.geolocation.getCurrentPosition(handleSuccess, handleGeolocationError, {
+    enableHighAccuracy: true,
+    timeout: 10000,
+    maximumAge: 0,
   });
-});
+}
+
+if (button) {
+  button.addEventListener('click', handleClick);
+}
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/service-worker.js').catch((err) => {
+      console.error('Service worker registration failed', err);
+    });
+  });
+}
+
+setStatus();
