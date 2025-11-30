@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import json
+import math
+from pathlib import Path
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Iterable, Optional, Tuple
 
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
@@ -9,6 +12,68 @@ from db import db
 from models import ClickEvent
 
 bp = Blueprint("routes", __name__)
+TRAFFIC_LIGHTS_FILE = Path(__file__).with_name("light_traffics.json")
+DEFAULT_DISTANCE_THRESHOLD_METERS = 75.0
+
+_TRAFFIC_LIGHTS: list[Tuple[float, float]] = []
+
+
+def _load_traffic_lights() -> list[Tuple[float, float]]:
+    """Load traffic light coordinates from the JSON file.
+
+    The results are cached in memory after the first read to avoid
+    unnecessary disk access on subsequent requests.
+    """
+
+    if _TRAFFIC_LIGHTS:
+        return _TRAFFIC_LIGHTS
+
+    try:
+        raw_data = json.loads(TRAFFIC_LIGHTS_FILE.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        current_app.logger.error("Traffic lights file not found: %s", TRAFFIC_LIGHTS_FILE)
+        return []
+    except json.JSONDecodeError:
+        current_app.logger.error("Traffic lights file contains invalid JSON: %s", TRAFFIC_LIGHTS_FILE)
+        return []
+
+    for entry in raw_data:
+        try:
+            lat = float(entry["lat"])
+            lon = float(entry["lon"])
+        except (KeyError, TypeError, ValueError):
+            continue
+
+        _TRAFFIC_LIGHTS.append((lat, lon))
+
+    return _TRAFFIC_LIGHTS
+
+
+def _haversine_distance_meters(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    """Calculate the distance between two coordinates in meters."""
+
+    radius_m = 6_371_000  # Earth radius in meters
+
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    d_phi = math.radians(lat2 - lat1)
+    d_lambda = math.radians(lon2 - lon1)
+
+    a = math.sin(d_phi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(d_lambda / 2) ** 2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+    return radius_m * c
+
+
+def _nearest_distance(lat: float, lon: float, lights: Iterable[Tuple[float, float]]) -> Optional[float]:
+    """Return the distance in meters to the nearest traffic light."""
+
+    min_distance: Optional[float] = None
+    for target_lat, target_lon in lights:
+        distance = _haversine_distance_meters(lat, lon, target_lat, target_lon)
+        if min_distance is None or distance < min_distance:
+            min_distance = distance
+
+    return min_distance
 
 
 def save_click_to_db(lat: float, lon: float, speed: Optional[float], timestamp: datetime) -> None:
@@ -66,6 +131,29 @@ def api_click() -> Any:
         timestamp = timestamp.astimezone(timezone.utc)
     except (TypeError, ValueError):
         return jsonify({"error": "Invalid data format"}), 400
+
+    traffic_lights = _load_traffic_lights()
+    if not traffic_lights:
+        return jsonify({"error": "Не удалось проверить расстояние до светофора."}), 500
+
+    distance_threshold = current_app.config.get(
+        "TRAFFIC_LIGHT_MAX_DISTANCE_METERS", DEFAULT_DISTANCE_THRESHOLD_METERS
+    )
+    nearest_distance = _nearest_distance(lat, lon, traffic_lights)
+
+    if nearest_distance is None:
+        return jsonify({"error": "Не удалось проверить расстояние до светофора."}), 500
+
+    if nearest_distance > distance_threshold:
+        return (
+            jsonify(
+                {
+                    "error": "Вы находитесь слишком далеко от ближайшего светофора для отправки сигнала.",
+                    "details": {"distance_m": round(nearest_distance, 1)},
+                }
+            ),
+            400,
+        )
 
     save_click_to_db(lat, lon, speed, timestamp)
 

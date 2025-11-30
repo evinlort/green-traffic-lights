@@ -56,15 +56,27 @@ async function sendPayload(payload) {
       body: JSON.stringify(payload),
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+    let responseBody = null;
+    try {
+      responseBody = await response.json();
+    } catch (parseError) {
+      // Ignore JSON parsing failures for non-JSON responses
     }
 
-    await response.json();
+    if (!response.ok) {
+      const backendError = responseBody && typeof responseBody.error === 'string'
+        ? responseBody.error
+        : `HTTP ${response.status}`;
+      throw new Error(backendError);
+    }
+
     setStatus('Сигнал отправлен! Спасибо.', 'success');
   } catch (err) {
     console.error('Ошибка при отправке данных', err);
-    setStatus('Не удалось отправить данные. Попробуйте ещё раз.', 'error');
+    const message = err instanceof Error && err.message
+      ? err.message
+      : 'Не удалось отправить данные. Попробуйте ещё раз.';
+    setStatus(message, 'error');
   } finally {
     setDisabled(false);
   }
