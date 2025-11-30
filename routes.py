@@ -19,42 +19,57 @@ _TRAFFIC_LIGHTS: list[Tuple[float, float]] = []
 _TRAFFIC_LIGHTS_MTIME: Optional[float] = None
 
 
-def _load_traffic_lights(force_reload: bool = False) -> list[Tuple[float, float]]:
-    """Load traffic light coordinates from the JSON file.
-
-    The results are cached in memory after the first read to avoid
-    unnecessary disk access on subsequent requests.
-    """
+def _load_traffic_lights() -> list[Tuple[float, float]]:
+    """Load traffic light coordinates from the JSON file with mtime caching."""
 
     global _TRAFFIC_LIGHTS, _TRAFFIC_LIGHTS_MTIME
 
     try:
         mtime = TRAFFIC_LIGHTS_FILE.stat().st_mtime
-    except FileNotFoundError:
-        current_app.logger.error("Traffic lights file not found: %s", TRAFFIC_LIGHTS_FILE)
-        return []
 
-    if _TRAFFIC_LIGHTS and not force_reload and _TRAFFIC_LIGHTS_MTIME == mtime:
-        return _TRAFFIC_LIGHTS
+        if _TRAFFIC_LIGHTS and _TRAFFIC_LIGHTS_MTIME == mtime:
+            return _TRAFFIC_LIGHTS
 
-    try:
         raw_data = json.loads(TRAFFIC_LIGHTS_FILE.read_text(encoding="utf-8"))
+
     except FileNotFoundError:
+        if _TRAFFIC_LIGHTS:
+            current_app.logger.warning(
+                "Traffic lights file missing; using cached data from previous load"
+            )
+            return _TRAFFIC_LIGHTS
+
         current_app.logger.error("Traffic lights file not found: %s", TRAFFIC_LIGHTS_FILE)
         return []
     except json.JSONDecodeError:
         current_app.logger.error("Traffic lights file contains invalid JSON: %s", TRAFFIC_LIGHTS_FILE)
         return []
 
+    if not isinstance(raw_data, list):
+        current_app.logger.warning(
+            "Unexpected traffic lights data type %s; expected a list of entries", type(raw_data).__name__
+        )
+        return []
+
     parsed: list[Tuple[float, float]] = []
+    discarded = 0
     for entry in raw_data:
+        if not isinstance(entry, dict):
+            discarded += 1
+            continue
         try:
             lat = float(entry["lat"])
             lon = float(entry["lon"])
         except (KeyError, TypeError, ValueError):
+            discarded += 1
             continue
 
         parsed.append((lat, lon))
+
+    if discarded:
+        current_app.logger.warning(
+            "Discarded %d malformed traffic light entries from %s", discarded, TRAFFIC_LIGHTS_FILE
+        )
 
     _TRAFFIC_LIGHTS = parsed
     _TRAFFIC_LIGHTS_MTIME = mtime
@@ -113,6 +128,35 @@ def _nearest_distance(lat: float, lon: float, lights: Iterable[Tuple[float, floa
     return min_distance
 
 
+def _validate_click_distance(lat: float, lon: float) -> Optional[Tuple[dict[str, Any], int]]:
+    traffic_lights = _load_traffic_lights()
+    if not traffic_lights:
+        current_app.logger.warning(
+            "Traffic lights data unavailable; allowing click without distance enforcement"
+        )
+        return None
+
+    distance_threshold = _get_distance_threshold()
+    nearest_distance = _nearest_distance(lat, lon, traffic_lights)
+
+    if nearest_distance is None:
+        current_app.logger.warning(
+            "Traffic lights data empty; allowing click without distance enforcement"
+        )
+        return None
+
+    if nearest_distance > distance_threshold:
+        return (
+            {
+                "error": "Вы находитесь слишком далеко от ближайшего светофора для отправки сигнала.",
+                "details": {"distance_m": round(nearest_distance, 1)},
+            },
+            400,
+        )
+
+    return None
+
+
 def save_click_to_db(lat: float, lon: float, speed: Optional[float], timestamp: datetime) -> None:
     """Persist click data to the configured database."""
 
@@ -147,17 +191,15 @@ def api_click() -> Any:
         return jsonify({"error": "Invalid data format"}), 400
 
     speed_raw = data.get("speed")
-    speed: Optional[float]
-    if speed_raw is None:
-        speed = None
-    else:
+    if speed_raw is not None:
         try:
             speed = float(speed_raw)
         except (TypeError, ValueError):
             return jsonify({"error": "Invalid data format"}), 400
+    else:
+        speed = None
 
-    timestamp_raw = data.get("timestamp")
-    if not isinstance(timestamp_raw, str):
+    if not isinstance(timestamp_raw := data.get("timestamp"), str):
         return jsonify({"error": "Invalid data format"}), 400
 
     try:
@@ -169,29 +211,10 @@ def api_click() -> Any:
     except (TypeError, ValueError):
         return jsonify({"error": "Invalid data format"}), 400
 
-    traffic_lights = _load_traffic_lights()
-    if not traffic_lights:
-        current_app.logger.warning(
-            "Traffic lights data unavailable; allowing click without distance enforcement"
-        )
-    else:
-        distance_threshold = _get_distance_threshold()
-        nearest_distance = _nearest_distance(lat, lon, traffic_lights)
-
-        if nearest_distance is None:
-            current_app.logger.warning(
-                "Traffic lights data empty; allowing click without distance enforcement"
-            )
-        elif nearest_distance > distance_threshold:
-            return (
-                jsonify(
-                    {
-                        "error": "Вы находитесь слишком далеко от ближайшего светофора для отправки сигнала.",
-                        "details": {"distance_m": round(nearest_distance, 1)},
-                    }
-                ),
-                400,
-            )
+    validation_result = _validate_click_distance(lat, lon)
+    if validation_result is not None:
+        payload, status = validation_result
+        return jsonify(payload), status
 
     save_click_to_db(lat, lon, speed, timestamp)
 

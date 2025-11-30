@@ -74,9 +74,11 @@ async function sendPayload(payload) {
     throw new Error(backendError);
   } catch (err) {
     console.error('Ошибка при отправке данных', err);
-    const message = err instanceof Error && err.message
-      ? err.message
-      : 'Не удалось отправить данные. Попробуйте ещё раз.';
+    const message = typeof err === 'string'
+      ? err
+      : err instanceof Error && err.message
+        ? err.message
+        : 'Не удалось отправить данные. Попробуйте ещё раз.';
     setStatus(message, 'error');
   } finally {
     setDisabled(false);
