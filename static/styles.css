@@ -37,36 +37,41 @@ body {
   justify-content: center;
 }
 
-/* Wrapper to constrain width and provide breathing room */
+/* Wrapper to center content in the viewport */
 .app {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing);
   width: 100%;
-  max-width: 420px;
+  min-height: 100vh;
   padding: var(--spacing);
   text-align: center;
 }
 
 /* Title styling */
 .app-title {
-  margin: 0 0 18px;
+  margin: 0;
   font-size: 28px;
   font-weight: 700;
   letter-spacing: -0.02em;
 }
 
-/* Shared button styles: full-width on mobile with a comfortable tap target */
+/* Shared button styles: circular, centered, and sized to a third of the viewport */
 .go-button {
-  width: 100%;
-  max-width: var(--max-button-width);
-  min-height: 88px;
-  padding: 18px 26px;
+  display: grid;
+  place-items: center;
+  width: 33vmin;
+  height: 33vmin;
   border: none;
-  border-radius: var(--button-radius);
-  font-size: 18px;
+  border-radius: 50%;
+  font-size: 20px;
   font-weight: 700;
   letter-spacing: 0.01em;
   color: #fff;
   cursor: pointer;
-  background: var(--primary);
+  background: var(--success);
   box-shadow: var(--shadow-strong);
   transition: transform 120ms ease, box-shadow 160ms ease, background-color 160ms ease;
 }
