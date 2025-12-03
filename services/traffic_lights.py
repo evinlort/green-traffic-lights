@@ -67,6 +67,12 @@ def _load_traffic_lights() -> list[Tuple[float, float]]:
         current_app.logger.error(
             "Traffic lights file contains invalid JSON: %s", traffic_lights_file
         )
+        if _TRAFFIC_LIGHTS:
+            _TRAFFIC_LIGHTS_MTIME = mtime
+            current_app.logger.warning(
+                "Using cached traffic lights; latest file is malformed"
+            )
+            return _TRAFFIC_LIGHTS
         return []
 
     if not isinstance(raw_data, list):
