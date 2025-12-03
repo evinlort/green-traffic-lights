@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -17,7 +18,12 @@ def save_click_to_db(lat: float, lon: float, speed: Optional[float], timestamp: 
 
     click_event = ClickEvent(lat=lat, lon=lon, speed=speed, timestamp=timestamp)
     db.session.add(click_event)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Failed to persist click event")
+        raise
 
 
 @bp.route("/")
@@ -44,6 +50,12 @@ def api_click() -> Any:
         lon = float(data["lon"])
     except (TypeError, ValueError):
         return jsonify({"error": "Invalid data format"}), 400
+
+    if not (math.isfinite(lat) and math.isfinite(lon)):
+        return jsonify({"error": "Invalid coordinates"}), 400
+
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return jsonify({"error": "Invalid coordinates"}), 400
 
     speed_raw = data.get("speed")
     if speed_raw is not None:
