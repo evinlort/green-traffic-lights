@@ -122,6 +122,10 @@ project/
   ```
 - Откройте в браузере `http://localhost:8000`.
 
+## Documentation / Документация
+
+- Detailed API, function, and component reference (English & Russian): [docs/REFERENCE.md](docs/REFERENCE.md)
+
 ### Android (Termux)
 1. Установите Python в Termux: `pkg install python`.
 2. (Опционально) Создайте виртуальное окружение: `python -m venv .venv && source .venv/bin/activate`.
