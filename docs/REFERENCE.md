@@ -201,7 +201,7 @@ This document lists all public APIs, functions, and client components available 
 - **Использование:** Откройте `http://localhost:8000/` и нажмите кнопку, чтобы отправить текущие координаты. Убедитесь, что разрешён доступ к геолокации.
 
 ## Configuration recap / Итоги по настройкам
-- `DATABASE_URL` – override database URI (e.g., PostgreSQL URL) instead of the default SQLite file.
+- `DATABASE_URL` – overrides the database URI (e.g., to a PostgreSQL URL) instead of the default SQLite file.
 - `TRAFFIC_LIGHTS_FILE` – custom path to the traffic lights JSON.
 - `TRAFFIC_LIGHT_MAX_DISTANCE_METERS` – distance threshold for `validate_click_distance`.
 
