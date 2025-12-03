@@ -1,4 +1,4 @@
-const CACHE_NAME = 'green-light-v1';
+const CACHE_NAME = 'green-light-static-v2';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
@@ -36,13 +36,36 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
+  if (
+    request.mode === 'navigate'
+    || (request.headers.get('accept') || '').includes('text/html')
+  ) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          const copy = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
+          return networkResponse;
+        })
+        .catch(() => caches.match('/index.html')),
+    );
+    return;
+  }
 
-      return fetch(request);
-    }),
+  event.respondWith(
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.match(request).then((cachedResponse) => {
+        const networkFetch = fetch(request)
+          .then((networkResponse) => {
+            if (networkResponse && networkResponse.ok) {
+              cache.put(request, networkResponse.clone());
+            }
+            return networkResponse;
+          })
+          .catch(() => cachedResponse);
+
+        return cachedResponse || networkFetch;
+      }),
+    ),
   );
 });

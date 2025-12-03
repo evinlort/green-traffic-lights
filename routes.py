@@ -10,6 +10,16 @@ from models import ClickEvent
 from services.traffic_lights import validate_click_distance
 
 bp = Blueprint("routes", __name__)
+STATIC_IMMUTABLE_EXTS = (
+    ".css",
+    ".js",
+    ".json",
+    ".png",
+    ".svg",
+    ".webp",
+    ".ico",
+    ".txt",
+)
 
 
 def save_click_to_db(lat: float, lon: float, speed: Optional[float], timestamp: datetime) -> None:
@@ -74,3 +84,19 @@ def api_click() -> Any:
     save_click_to_db(lat, lon, speed, timestamp)
 
     return jsonify({"status": "ok"}), 200
+
+
+@bp.after_request
+def add_cache_headers(response: Any) -> Any:
+    """Add cache headers to speed up static asset delivery."""
+
+    if request.method != "GET":
+        return response
+
+    path = request.path
+    if path == "/" or path.endswith(".html"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    elif any(path.endswith(ext) for ext in STATIC_IMMUTABLE_EXTS):
+        response.headers.setdefault("Cache-Control", "public, max-age=31536000, immutable")
+
+    return response
