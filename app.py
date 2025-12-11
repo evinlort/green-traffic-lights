@@ -21,4 +21,5 @@ Compress(app)
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    # Use adhoc TLS so HTTPS requests do not fail with "Bad request version".
+    app.run(host="0.0.0.0", port=8000, debug=True, ssl_context="adhoc")
