@@ -1,5 +1,4 @@
 #!/usr/bin/env fish
-set -e
 
 set script_dir (dirname (status --current-filename))
 set venv_path "$script_dir/../.venv"
@@ -16,11 +15,14 @@ if not test -f "$venv_path/bin/activate.fish"
     exit 1
 end
 
-source "$venv_path/bin/activate.fish"
+if not source "$venv_path/bin/activate.fish"
+    echo "Failed to activate virtual environment from $venv_path"
+    exit 1
+end
 
 set requirements_file "$script_dir/../requirements.txt"
 if test -f $requirements_file
-    python -m pip install --requirement $requirements_file
+    python -m pip install --requirement $requirements_file; or exit 1
 else
     echo "requirements.txt not found at $requirements_file"
     exit 1
