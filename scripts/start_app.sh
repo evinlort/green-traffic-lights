@@ -22,4 +22,6 @@ else
 fi
 
 export FLASK_APP=app
-exec flask run --host 0.0.0.0 --port 8000
+PORT=8000
+echo "Starting Flask HTTPS (adhoc) on port ${PORT}"
+exec flask run --host 0.0.0.0 --port "$PORT" --cert=adhoc

@@ -29,4 +29,6 @@ else
 end
 
 set -x FLASK_APP app
-exec flask run --host 0.0.0.0 --port 8000
+set port 8000
+echo "Starting Flask HTTPS (adhoc) on port $port"
+exec flask run --host 0.0.0.0 --port $port --cert=adhoc
