@@ -10,6 +10,19 @@ const mapContainer = document.getElementById('map');
 let mapInstance = null;
 let userMarker = null;
 let lightMarkers = [];
+let refreshIntervalId = null;
+let refreshInFlight = false;
+let refreshEnabled = false;
+
+function cleanupRefreshInterval() {
+  if (refreshIntervalId !== null) {
+    clearTimeout(refreshIntervalId);
+    refreshIntervalId = null;
+  }
+
+  refreshInFlight = false;
+  refreshEnabled = false;
+}
 
 function setStatus(target, text, state = 'info') {
   if (!target) return;
@@ -182,6 +195,32 @@ function fitMapToBounds(googleMaps, points) {
   }
 }
 
+function shouldRefitMap(googleMaps, points) {
+  if (!mapInstance) return false;
+  const bounds = mapInstance.getBounds();
+  if (!bounds || bounds.isEmpty()) return true;
+
+  const northEast = bounds.getNorthEast();
+  const southWest = bounds.getSouthWest();
+
+  const latSpan = Math.abs(northEast.lat() - southWest.lat());
+  const lngSpan = Math.abs(northEast.lng() - southWest.lng());
+
+  const latPadding = Math.max(latSpan * 0.1, 0.0005);
+  const lngPadding = Math.max(lngSpan * 0.1, 0.0005);
+
+  const paddedBounds = new googleMaps.LatLngBounds(
+    new googleMaps.LatLng(southWest.lat() - latPadding, southWest.lng() - lngPadding),
+    new googleMaps.LatLng(northEast.lat() + latPadding, northEast.lng() + lngPadding),
+  );
+
+  return points.some((point) => {
+    const lng = point.lon ?? point.lng;
+    if (!Number.isFinite(point.lat) || !Number.isFinite(lng)) return false;
+    return !paddedBounds.contains(new googleMaps.LatLng(point.lat, lng));
+  });
+}
+
 function showNearestLightStatus(nearest) {
   setStatus(
     distanceText,
@@ -220,6 +259,58 @@ function requestCurrentPosition(options) {
   return new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(resolve, reject, options);
   });
+}
+
+async function updateMapState(googleMaps, lights, { refitOnChange = false } = {}) {
+  try {
+    let position;
+    try {
+      position = await requestCurrentPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+    } catch (geoError) {
+      handleGeolocationError(geoError);
+      return;
+    }
+
+    const { latitude, longitude } = position.coords;
+    const userLocation = { lat: latitude, lon: longitude };
+
+    placeUserMarker(googleMaps, userLocation);
+
+    const lightsWithDistance = lights
+      .map((light) => ({
+        ...light,
+        distance: haversineDistanceMeters(
+          { lat: userLocation.lat, lon: userLocation.lon },
+          { lat: light.lat, lon: light.lon },
+        ),
+      }))
+      .filter((light) => Number.isFinite(light.distance) && light.distance <= NEARBY_RADIUS_METERS && light.distance > 0);
+
+    const nearest = findNearestLight(lightsWithDistance);
+
+    clearLightMarkers();
+    lightsWithDistance.forEach((light) => createMarker(googleMaps, light, light === nearest));
+
+    if (nearest) {
+      showNearestLightStatus(nearest);
+    } else if (lights.length === 0) {
+      showNoLightsDataStatus();
+    } else {
+      showNoNearbyLightsStatus();
+    }
+
+    if (refitOnChange) {
+      const points = [userLocation, ...lightsWithDistance];
+      if (shouldRefitMap(googleMaps, points)) {
+        fitMapToBounds(googleMaps, points);
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Ошибка при обновлении карты.';
+    console.error('Ошибка обновления карты green_way:', error);
+    setStatus(distanceText, message, 'error');
+    setStatus(mapStatus, message, 'error');
+  }
 }
 
 async function initGreenWay() {
@@ -261,32 +352,25 @@ async function initGreenWay() {
       fullscreenControl: false,
     });
 
-    placeUserMarker(googleMaps, userLocation);
+    await updateMapState(googleMaps, lights, { refitOnChange: true });
 
-    const lightsWithDistance = lights
-      .map((light) => ({
-        ...light,
-        distance: haversineDistanceMeters(
-          { lat: userLocation.lat, lon: userLocation.lon },
-          { lat: light.lat, lon: light.lon },
-        ),
-      }))
-      .filter((light) => Number.isFinite(light.distance) && light.distance <= NEARBY_RADIUS_METERS && light.distance > 0);
+    cleanupRefreshInterval();
+    refreshEnabled = true;
+    const runRefresh = async () => {
+      if (!refreshEnabled) return;
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        await updateMapState(googleMaps, lights, { refitOnChange: true });
+      } finally {
+        refreshInFlight = false;
+        if (refreshEnabled) {
+          refreshIntervalId = window.setTimeout(runRefresh, 5000);
+        }
+      }
+    };
 
-    const nearest = findNearestLight(lightsWithDistance);
-
-    clearLightMarkers();
-    lightsWithDistance.forEach((light) => createMarker(googleMaps, light, light === nearest));
-
-    if (nearest) {
-      showNearestLightStatus(nearest);
-    } else if (lights.length === 0) {
-      showNoLightsDataStatus();
-    } else {
-      showNoNearbyLightsStatus();
-    }
-
-    fitMapToBounds(googleMaps, [userLocation, ...lightsWithDistance]);
+    refreshIntervalId = window.setTimeout(runRefresh, 5000);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка инициализации карты.';
     console.error('Ошибка в сценарии green_way:', error);
@@ -294,6 +378,9 @@ async function initGreenWay() {
     setStatus(mapStatus, message, 'error');
   }
 }
+
+window.addEventListener('pagehide', cleanupRefreshInterval);
+window.addEventListener('beforeunload', cleanupRefreshInterval);
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initGreenWay);
