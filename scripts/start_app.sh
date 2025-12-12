@@ -21,6 +21,17 @@ else
   exit 1
 fi
 
+CONFIG_FILE="$REPO_DIR/../.config"
+if [[ -f "$CONFIG_FILE" ]]; then
+  echo "Loading environment from $CONFIG_FILE"
+  # Export all variables defined in the config file
+  set -a
+  source "$CONFIG_FILE"
+  set +a
+else
+  echo "Config file not found at $CONFIG_FILE"
+fi
+
 export FLASK_APP=app
 PORT=8000
 echo "Starting Flask HTTPS (adhoc) on port ${PORT}"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import math
 from datetime import datetime, timezone
 from typing import Any, Optional
@@ -41,6 +42,26 @@ def index() -> Any:
     """Serve the main PWA entry point from the static folder."""
 
     return send_from_directory(current_app.static_folder, "index.html")
+
+
+@bp.route("/green_way")
+def green_way() -> Any:
+    """Serve the dedicated Green Way map view."""
+
+    return send_from_directory(current_app.static_folder, "green_way.html")
+
+
+@bp.route("/maps-config.js")
+def maps_config() -> Any:
+    """Expose the Google Maps API key without persisting it in the static files."""
+
+    api_key = current_app.config.get("GOOGLE_MAPS_API_KEY", "")
+    payload = f"window.GOOGLE_MAPS_API_KEY = {json.dumps(api_key)};\n"
+
+    response = current_app.response_class(payload, mimetype="application/javascript")
+    response.cache_control.no_store = True
+    response.cache_control.max_age = 0
+    return response
 
 
 @bp.route("/api/click", methods=["POST"])

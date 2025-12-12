@@ -14,6 +14,7 @@ _default_db_path = os.path.join(os.path.abspath(os.path.dirname(__file__)), "gre
 app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", f"sqlite:///{_default_db_path}")
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = timedelta(days=30)
+app.config["GOOGLE_MAPS_API_KEY"] = os.getenv("GOOGLE_MAPS_API_KEY")
 
 init_db(app)
 app.register_blueprint(routes_bp)
