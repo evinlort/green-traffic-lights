@@ -96,22 +96,22 @@ function calculateBearingDegrees(from, to) {
 }
 
 const COMPASS_LABELS = [
-  'С',
-  'ССВ',
-  'СВ',
-  'ВСВ',
-  'В',
-  'ВЮВ',
-  'ЮВ',
-  'ЮЮВ',
-  'Ю',
-  'ЮЮЗ',
-  'ЮЗ',
-  'ЗЮЗ',
-  'З',
-  'ЗСЗ',
-  'СЗ',
-  'ССЗ',
+  'north',
+  'north-northeast',
+  'northeast',
+  'east-northeast',
+  'east',
+  'east-southeast',
+  'southeast',
+  'south-southeast',
+  'south',
+  'south-southwest',
+  'southwest',
+  'west-southwest',
+  'west',
+  'west-northwest',
+  'northwest',
+  'north-northwest',
 ];
 
 function bearingToDirectionLabel(bearingDegrees) {
@@ -125,9 +125,9 @@ function bearingToDirectionLabel(bearingDegrees) {
 function formatDistance(meters) {
   if (!Number.isFinite(meters)) return '—';
   if (meters < 1000) {
-    return `${Math.round(meters)} м`;
+    return `${Math.round(meters)} meters`;
   }
-  return `${(meters / 1000).toFixed(2)} км`;
+  return `${(meters / 1000).toFixed(2)} km`;
 }
 
 async function loadGoogleMaps(apiKey) {
@@ -294,8 +294,8 @@ function shouldRefitMap(googleMaps, points) {
 
 function showNearestLightStatus(nearest) {
   const directionMessage = nearest.directionLabel
-    ? `Двигайтесь на ${nearest.directionLabel} к ближайшему светофору: ${formatDistance(nearest.distance)}`
-    : `До ближайшего светофора: ${formatDistance(nearest.distance)}`;
+    ? `Drive ${nearest.directionLabel} ${formatDistance(nearest.distance)}`
+    : `Nearest green traffic light: ${formatDistance(nearest.distance)}`;
 
   setStatus(distanceText, directionMessage, 'success');
   setStatus(mapStatus, `Показаны светофоры в радиусе ${NEARBY_RADIUS_TEXT} от вас.`, 'success');
