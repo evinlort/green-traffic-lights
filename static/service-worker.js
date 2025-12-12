@@ -2,8 +2,8 @@ const CACHE_NAME = 'green-light-static-v3';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
-  '/styles.css',
-  '/main.js',
+  '/css/styles.css',
+  '/js/main.js',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',

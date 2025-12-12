@@ -1,0 +1,15 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 2rem auto;
+  max-width: 720px;
+  line-height: 1.6;
+}
+
+h1,
+h2 {
+  color: #0a5b2a;
+}
+
+ul {
+  padding-left: 1.2rem;
+}
