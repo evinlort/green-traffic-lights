@@ -13,6 +13,8 @@ let lightMarkers = [];
 let refreshIntervalId = null;
 let refreshInFlight = false;
 let refreshEnabled = false;
+let googleMapsApi = null;
+let latestLights = [];
 
 function cleanupRefreshInterval() {
   if (refreshIntervalId !== null) {
@@ -22,6 +24,34 @@ function cleanupRefreshInterval() {
 
   refreshInFlight = false;
   refreshEnabled = false;
+}
+
+function restartRefreshIfPossible() {
+  if (!googleMapsApi || !mapInstance || refreshEnabled) return;
+
+  cleanupRefreshInterval();
+  refreshEnabled = true;
+  refreshIntervalId = window.setTimeout(() => runRefresh({ refitOnChange: true }), 0);
+}
+
+async function runRefresh({ refitOnChange = true } = {}) {
+  if (!refreshEnabled || refreshInFlight || !googleMapsApi) return;
+  refreshInFlight = true;
+
+  try {
+    latestLights = await fetchTrafficLights();
+    await updateMapState(googleMapsApi, latestLights, { refitOnChange });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Ошибка при обновлении карты.';
+    console.error('Ошибка обновления карты green_way:', error);
+    setStatus(distanceText, message, 'error');
+    setStatus(mapStatus, message, 'error');
+  } finally {
+    refreshInFlight = false;
+    if (refreshEnabled) {
+      refreshIntervalId = window.setTimeout(() => runRefresh({ refitOnChange }), 5000);
+    }
+  }
 }
 
 function setStatus(target, text, state = 'info') {
@@ -336,6 +366,9 @@ async function initGreenWay() {
       fetchTrafficLights(),
     ]);
 
+    googleMapsApi = googleMaps;
+    latestLights = lights;
+
     let position;
     try {
       position = await requestCurrentPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
@@ -354,25 +387,11 @@ async function initGreenWay() {
       fullscreenControl: false,
     });
 
-    await updateMapState(googleMaps, lights, { refitOnChange: true });
+    await updateMapState(googleMapsApi, latestLights, { refitOnChange: true });
 
     cleanupRefreshInterval();
     refreshEnabled = true;
-    const runRefresh = async () => {
-      if (!refreshEnabled) return;
-      if (refreshInFlight) return;
-      refreshInFlight = true;
-      try {
-        await updateMapState(googleMaps, lights, { refitOnChange: true });
-      } finally {
-        refreshInFlight = false;
-        if (refreshEnabled) {
-          refreshIntervalId = window.setTimeout(runRefresh, 5000);
-        }
-      }
-    };
-
-    refreshIntervalId = window.setTimeout(runRefresh, 5000);
+    refreshIntervalId = window.setTimeout(() => runRefresh({ refitOnChange: true }), 5000);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка инициализации карты.';
     console.error('Ошибка в сценарии green_way:', error);
@@ -383,6 +402,16 @@ async function initGreenWay() {
 
 window.addEventListener('pagehide', cleanupRefreshInterval);
 window.addEventListener('beforeunload', cleanupRefreshInterval);
+window.addEventListener('pageshow', () => {
+  if (document.visibilityState === 'visible') {
+    restartRefreshIfPossible();
+  }
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    restartRefreshIfPossible();
+  }
+});
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initGreenWay);
