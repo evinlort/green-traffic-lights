@@ -9,7 +9,7 @@ from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
 from db import db
 from models import ClickEvent
-from services.traffic_lights import validate_click_distance
+from services.traffic_lights import _get_traffic_lights_path, validate_click_distance
 
 bp = Blueprint("routes", __name__)
 STATIC_IMMUTABLE_EXTS = (
@@ -49,6 +49,49 @@ def green_way() -> Any:
     """Serve the dedicated Green Way map view."""
 
     return send_from_directory(current_app.static_folder, "green_way.html")
+
+
+@bp.route("/light_traffics.json")
+def light_traffics() -> Any:
+    """Serve the traffic lights coordinates JSON to the client.
+
+    The file is stored next to the Flask app (or at ``TRAFFIC_LIGHTS_FILE``) for
+    server-side validation, so expose it via an explicit route instead of the
+    static folder. When the file is missing or malformed, return an empty list
+    to keep the client map usable.
+    """
+
+    traffic_lights_file = _get_traffic_lights_path()
+
+    try:
+        raw_text = traffic_lights_file.read_text(encoding="utf-8")
+        raw_data = json.loads(raw_text)
+        if not isinstance(raw_data, list):
+            current_app.logger.warning(
+                "Traffic lights file does not contain a list: %s", traffic_lights_file
+            )
+            raw_data = []
+    except FileNotFoundError:
+        current_app.logger.warning(
+            "Traffic lights file not found for client: %s", traffic_lights_file
+        )
+        raw_data = []
+    except json.JSONDecodeError:
+        current_app.logger.warning(
+            "Traffic lights file contains invalid JSON for client: %s", traffic_lights_file
+        )
+        raw_data = []
+    except OSError:
+        current_app.logger.exception(
+            "Failed to read traffic lights file for client: %s", traffic_lights_file
+        )
+        raw_data = []
+
+    response = jsonify(raw_data)
+    response.cache_control.no_store = True
+    response.cache_control.no_cache = True
+    response.cache_control.max_age = 0
+    return response
 
 
 @bp.route("/maps-config.js")
