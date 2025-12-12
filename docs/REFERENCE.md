@@ -2,53 +2,31 @@
 
 This document lists all public APIs, functions, and client components available in the project. Each section contains English and Russian descriptions, plus examples and usage guidance.
 
-## Flask application (`app.py`)
+## Flask application (`app.py` and `green_traffic_lights/__init__.py`)
 
 ### English
-- **`app`** – Flask application configured with:
-  - `static_folder="static"`, `static_url_path=""` to serve the PWA assets.
-  - `SQLALCHEMY_DATABASE_URI` – pulled from `DATABASE_URL` or defaults to `sqlite:///greenlights.db` in the repo root.
-  - `SQLALCHEMY_TRACK_MODIFICATIONS=False`.
-- The application registers the routes blueprint from `routes.py` and initializes the database via `init_db`.
-- **Running:** `flask --app app run --host 0.0.0.0 --port 8000` or `gunicorn --bind 0.0.0.0:8000 app:app`.
+- **`create_app()`** – factory that configures the Flask app with:
+  - `static_folder` pointing at the project `static/` directory and `static_url_path=""` to serve the PWA assets from root.
+  - Settings from `green_traffic_lights.config.Config`, including `SQLALCHEMY_DATABASE_URI` (env `DATABASE_URL` or `sqlite:///greenlights.db`), `SQLALCHEMY_TRACK_MODIFICATIONS=False`, and `SEND_FILE_MAX_AGE_DEFAULT=30 days`.
+- The application registers the routes blueprint from `green_traffic_lights/routes.py`, initializes the database via the shared `db` extension, and enables compression.
+- **Running:** `flask --app app run --host 0.0.0.0 --port 8000` or `gunicorn --bind 0.0.0.0:8000 app:app` (both create the app via `create_app()`).
 
 ### Русский
-- **`app`** – приложение Flask, сконфигурированное следующим образом:
-  - `static_folder="static"`, `static_url_path=""` для отдачи PWA-ресурсов.
-  - `SQLALCHEMY_DATABASE_URI` – из переменной `DATABASE_URL` или по умолчанию `sqlite:///greenlights.db` в корне репозитория.
-  - `SQLALCHEMY_TRACK_MODIFICATIONS=False`.
-- Приложение регистрирует blueprint маршрутов из `routes.py` и инициализирует базу через `init_db`.
-- **Запуск:** `flask --app app run --host 0.0.0.0 --port 8000` или `gunicorn --bind 0.0.0.0:8000 app:app`.
+- **`create_app()`** – фабрика, настраивающая приложение Flask:
+  - `static_folder` указывает на проектную папку `static/`, `static_url_path=""`, чтобы отдавать PWA из корня.
+  - Конфигурация из `green_traffic_lights.config.Config`, включая `SQLALCHEMY_DATABASE_URI` (переменная `DATABASE_URL` или `sqlite:///greenlights.db`), `SQLALCHEMY_TRACK_MODIFICATIONS=False` и `SEND_FILE_MAX_AGE_DEFAULT=30 дней`.
+- Приложение регистрирует blueprint маршрутов из `green_traffic_lights/routes.py`, инициализирует базу через общее расширение `db` и включает сжатие.
+- **Запуск:** `flask --app app run --host 0.0.0.0 --port 8000` или `gunicorn --bind 0.0.0.0:8000 app:app` (обе команды создают приложение через `create_app()`).
 
-## Database helper (`db.py`)
+## Database helper (`green_traffic_lights/extensions.py`)
 
 ### English
-- **`db`** – a shared `SQLAlchemy` instance used by models.
-- **`init_db(app: Flask) -> None`** – initialize the extension and create tables inside the application context.
-- **Usage example:**
-  ```python
-  from flask import Flask
-  from db import init_db
-
-  app = Flask(__name__)
-  app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///local.db"
-  init_db(app)
-  ```
+- **`db`** – a shared `SQLAlchemy` instance used by models and blueprints. Tables are created inside the application factory.
 
 ### Русский
-- **`db`** – общий экземпляр `SQLAlchemy`, используемый моделями.
-- **`init_db(app: Flask) -> None`** – инициализирует расширение и создаёт таблицы в контексте приложения.
-- **Пример использования:**
-  ```python
-  from flask import Flask
-  from db import init_db
+- **`db`** – общий экземпляр `SQLAlchemy`, используемый моделями и blueprint'ами. Таблицы создаются внутри фабрики приложения.
 
-  app = Flask(__name__)
-  app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///local.db"
-  init_db(app)
-  ```
-
-## Data model (`models/click_event.py`)
+## Data model (`green_traffic_lights/models/click_event.py`)
 
 ### English
 - **`ClickEvent`** – SQLAlchemy model representing a click report:
@@ -57,7 +35,7 @@ This document lists all public APIs, functions, and client components available 
   - `speed` (float, optional) – speed in km/h if available.
   - `timestamp` (datetime, timezone-aware, required) – when the click happened.
   - `created_at` (datetime, timezone-aware, default `func.now()`) – server insert time.
-- Records are created by `save_click_to_db` inside `routes.py`.
+- Records are created by `save_click_to_db` inside `green_traffic_lights/routes.py`.
 
 ### Русский
 - **`ClickEvent`** – модель SQLAlchemy, описывающая отправку клика:
@@ -68,7 +46,7 @@ This document lists all public APIs, functions, and client components available 
   - `created_at` (datetime с таймзоной, по умолчанию `func.now()`) – время вставки на сервере.
 - Записи создаются функцией `save_click_to_db` из `routes.py`.
 
-## Traffic light service (`services/traffic_lights.py`)
+## Traffic light service (`green_traffic_lights/services/traffic_lights.py`)
 
 ### English
 - **Purpose:** Validate how far a click is from known traffic lights.
@@ -82,7 +60,7 @@ This document lists all public APIs, functions, and client components available 
     - Returns `None` when the click is allowed; otherwise returns `(payload, status_code)` with a localized error message and `distance_m` detail.
 - **Usage example:**
   ```python
-  from services.traffic_lights import validate_click_distance
+  from green_traffic_lights.services.traffic_lights import validate_click_distance
 
   lat, lon = 55.75, 37.61
   validation = validate_click_distance(lat, lon)
@@ -105,7 +83,7 @@ This document lists all public APIs, functions, and client components available 
     - Возвращает `None`, если клик разрешён; иначе `(payload, status_code)` с локализованным текстом ошибки и полем `distance_m`.
 - **Пример использования:**
   ```python
-  from services.traffic_lights import validate_click_distance
+  from green_traffic_lights.services.traffic_lights import validate_click_distance
 
   lat, lon = 55.75, 37.61
   validation = validate_click_distance(lat, lon)
@@ -116,7 +94,7 @@ This document lists all public APIs, functions, and client components available 
       # Продолжить сохранение клика
   ```
 
-## Routes (`routes.py`)
+## Routes (`green_traffic_lights/routes.py`)
 
 ### English
 - **Blueprint `bp`** – mounted at root.

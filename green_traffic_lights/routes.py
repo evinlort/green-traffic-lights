@@ -7,9 +7,9 @@ from typing import Any, Optional
 
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
-from db import db
-from models import ClickEvent
-from services.traffic_lights import _get_traffic_lights_path, validate_click_distance
+from .extensions import db
+from .models import ClickEvent
+from .services.traffic_lights import _get_traffic_lights_path, validate_click_distance
 
 bp = Blueprint("routes", __name__)
 STATIC_IMMUTABLE_EXTS = (
