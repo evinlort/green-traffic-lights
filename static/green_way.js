@@ -83,6 +83,45 @@ function haversineDistanceMeters(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
+function calculateBearingDegrees(from, to) {
+  const lat1 = toRadians(from.lat);
+  const lat2 = toRadians(to.lat);
+  const dLon = toRadians(to.lon - from.lon);
+
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+  const bearing = (Math.atan2(y, x) * 180) / Math.PI;
+  return (bearing + 360) % 360;
+}
+
+function bearingToDirectionLabel(bearingDegrees) {
+  if (!Number.isFinite(bearingDegrees)) return null;
+
+  const compassLabels = [
+    'С',
+    'ССВ',
+    'СВ',
+    'ВСВ',
+    'В',
+    'ВЮВ',
+    'ЮВ',
+    'ЮЮВ',
+    'Ю',
+    'ЮЮЗ',
+    'ЮЗ',
+    'ЗЮЗ',
+    'З',
+    'ЗСЗ',
+    'СЗ',
+    'ССЗ',
+  ];
+
+  const sectorSize = 360 / compassLabels.length;
+  const index = Math.round(bearingDegrees / sectorSize) % compassLabels.length;
+  return compassLabels[index];
+}
+
 function formatDistance(meters) {
   if (!Number.isFinite(meters)) return '—';
   if (meters < 1000) {
@@ -254,11 +293,11 @@ function shouldRefitMap(googleMaps, points) {
 }
 
 function showNearestLightStatus(nearest) {
-  setStatus(
-    distanceText,
-    `До ближайшего зелёного светофора: ${formatDistance(nearest.distance)}`,
-    'success',
-  );
+  const directionMessage = nearest.directionLabel
+    ? `Двигайтесь на ${nearest.directionLabel} ${formatDistance(nearest.distance)}`
+    : `До ближайшего зелёного светофора: ${formatDistance(nearest.distance)}`;
+
+  setStatus(distanceText, directionMessage, 'success');
   setStatus(mapStatus, `Показаны светофоры в радиусе ${NEARBY_RADIUS_TEXT} от вас.`, 'success');
 }
 
@@ -315,13 +354,19 @@ async function updateMapState(googleMaps, lights, { refitOnChange = false } = {}
           { lat: userLocation.lat, lon: userLocation.lon },
           { lat: light.lat, lon: light.lon },
         ),
+        bearing: calculateBearingDegrees(userLocation, { lat: light.lat, lon: light.lon }),
       }))
       .filter((light) => Number.isFinite(light.distance) && light.distance <= NEARBY_RADIUS_METERS && light.distance > 0);
 
-    const nearest = findNearestLight(lightsWithDistance);
+    const lightsWithDirection = lightsWithDistance.map((light) => ({
+      ...light,
+      directionLabel: bearingToDirectionLabel(light.bearing),
+    }));
+
+    const nearest = findNearestLight(lightsWithDirection);
 
     clearLightMarkers();
-    lightsWithDistance.forEach((light) => createMarker(googleMaps, light, light === nearest));
+    lightsWithDirection.forEach((light) => createMarker(googleMaps, light, light === nearest));
 
     if (nearest) {
       showNearestLightStatus(nearest);
