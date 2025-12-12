@@ -114,12 +114,11 @@ const COMPASS_LABELS = [
   'ССЗ',
 ];
 
-const SECTOR_SIZE = 360 / COMPASS_LABELS.length;
-
 function bearingToDirectionLabel(bearingDegrees) {
   if (!Number.isFinite(bearingDegrees)) return null;
 
-  const index = Math.round(bearingDegrees / SECTOR_SIZE) % COMPASS_LABELS.length;
+  const sectorSize = 360 / COMPASS_LABELS.length;
+  const index = Math.round(bearingDegrees / sectorSize) % COMPASS_LABELS.length;
   return COMPASS_LABELS[index];
 }
 
@@ -296,7 +295,7 @@ function shouldRefitMap(googleMaps, points) {
 function showNearestLightStatus(nearest) {
   const directionMessage = nearest.directionLabel
     ? `Двигайтесь на ${nearest.directionLabel} к ближайшему светофору: ${formatDistance(nearest.distance)}`
-    : `До ближайшего зелёного светофора: ${formatDistance(nearest.distance)}`;
+    : `До ближайшего светофора: ${formatDistance(nearest.distance)}`;
 
   setStatus(distanceText, directionMessage, 'success');
   setStatus(mapStatus, `Показаны светофоры в радиусе ${NEARBY_RADIUS_TEXT} от вас.`, 'success');
