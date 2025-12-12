@@ -195,10 +195,26 @@ function shouldRefitMap(googleMaps, points) {
   const bounds = mapInstance.getBounds();
   if (!bounds || bounds.isEmpty()) return true;
 
+  const northEast = bounds.getNorthEast();
+  const southWest = bounds.getSouthWest();
+
+  // Add a small tolerance around the current bounds to avoid refitting on tiny changes
+  const latSpan = Math.abs(northEast.lat() - southWest.lat());
+  const lngSpan = Math.abs(northEast.lng() - southWest.lng());
+
+  // 10% of current span, with a minimum padding to handle very tight zoom levels
+  const latPadding = Math.max(latSpan * 0.1, 0.0005);
+  const lngPadding = Math.max(lngSpan * 0.1, 0.0005);
+
+  const paddedBounds = new googleMaps.LatLngBounds(
+    new googleMaps.LatLng(southWest.lat() - latPadding, southWest.lng() - lngPadding),
+    new googleMaps.LatLng(northEast.lat() + latPadding, northEast.lng() + lngPadding),
+  );
+
   return points.some((point) => {
     const lng = point.lon ?? point.lng;
     if (!Number.isFinite(point.lat) || !Number.isFinite(lng)) return false;
-    return !bounds.contains(new googleMaps.LatLng(point.lat, lng));
+    return !paddedBounds.contains(new googleMaps.LatLng(point.lat, lng));
   });
 }
 
