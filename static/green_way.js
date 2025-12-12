@@ -273,13 +273,12 @@ async function initGreenWay() {
       }))
       .filter((light) => Number.isFinite(light.distance) && light.distance <= NEARBY_RADIUS_METERS && light.distance > 0);
 
-    clearLightMarkers();
-    lightsWithDistance.forEach((light) => createMarker(googleMaps, light));
-
     const nearest = findNearestLight(lightsWithDistance);
 
+    clearLightMarkers();
+    lightsWithDistance.forEach((light) => createMarker(googleMaps, light, light === nearest));
+
     if (nearest) {
-      createMarker(googleMaps, nearest, true);
       showNearestLightStatus(nearest);
     } else if (lights.length === 0) {
       showNoLightsDataStatus();
