@@ -96,22 +96,22 @@ function calculateBearingDegrees(from, to) {
 }
 
 const COMPASS_LABELS = [
-  'north',
-  'north-northeast',
-  'northeast',
-  'east-northeast',
-  'east',
-  'east-southeast',
-  'southeast',
-  'south-southeast',
-  'south',
-  'south-southwest',
-  'southwest',
-  'west-southwest',
-  'west',
-  'west-northwest',
-  'northwest',
-  'north-northwest',
+  'N',
+  'NNE',
+  'NE',
+  'ENE',
+  'E',
+  'ESE',
+  'SE',
+  'SSE',
+  'S',
+  'SSW',
+  'SW',
+  'WSW',
+  'W',
+  'WNW',
+  'NW',
+  'NNW',
 ];
 
 function bearingToDirectionLabel(bearingDegrees) {
@@ -125,9 +125,9 @@ function bearingToDirectionLabel(bearingDegrees) {
 function formatDistance(meters) {
   if (!Number.isFinite(meters)) return '—';
   if (meters < 1000) {
-    return `${Math.round(meters)} meters`;
+    return `${Math.round(meters)} м`;
   }
-  return `${(meters / 1000).toFixed(2)} km`;
+  return `${(meters / 1000).toFixed(2)} км`;
 }
 
 async function loadGoogleMaps(apiKey) {
@@ -292,13 +292,22 @@ function shouldRefitMap(googleMaps, points) {
   });
 }
 
-function showNearestLightStatus(nearest) {
-  const directionMessage = nearest.directionLabel
-    ? `Drive ${nearest.directionLabel} ${formatDistance(nearest.distance)}`
-    : `Nearest green traffic light: ${formatDistance(nearest.distance)}`;
+function showNearestLightStatus(nearest, { withinRadius }) {
+  const directionPart = nearest.directionLabel ? `, направление ${nearest.directionLabel}` : '';
+  const baseMessage = `Ближайший зелёный светофор: ${formatDistance(nearest.distance)}${directionPart}.`;
 
-  setStatus(distanceText, directionMessage, 'success');
-  setStatus(mapStatus, `Показаны светофоры в радиусе ${NEARBY_RADIUS_TEXT} от вас.`, 'success');
+  if (withinRadius) {
+    setStatus(distanceText, baseMessage, 'success');
+    setStatus(mapStatus, `Показаны светофоры в радиусе ${NEARBY_RADIUS_TEXT} от вас.`, 'success');
+    return;
+  }
+
+  setStatus(
+    distanceText,
+    `Нет светофоров в радиусе ${NEARBY_RADIUS_TEXT}. ${baseMessage}`,
+    'warning',
+  );
+  setStatus(mapStatus, 'Показан ближайший известный светофор на карте.', 'warning');
 }
 
 function showNoLightsDataStatus() {
@@ -356,20 +365,27 @@ async function updateMapState(googleMaps, lights, { refitOnChange = false } = {}
         ),
         bearing: calculateBearingDegrees(userLocation, { lat: light.lat, lon: light.lon }),
       }))
-      .filter((light) => Number.isFinite(light.distance) && light.distance <= NEARBY_RADIUS_METERS && light.distance > 0);
+      .filter((light) => Number.isFinite(light.distance) && light.distance > 0);
 
     const lightsWithDirection = lightsWithDistance.map((light) => ({
       ...light,
       directionLabel: bearingToDirectionLabel(light.bearing),
     }));
 
+    const nearbyLights = lightsWithDirection.filter(
+      (light) => light.distance <= NEARBY_RADIUS_METERS && light.distance > 0,
+    );
+
     const nearest = findNearestLight(lightsWithDirection);
 
+    const markersToShow = nearbyLights.length > 0 ? nearbyLights : nearest ? [nearest] : [];
+
     clearLightMarkers();
-    lightsWithDirection.forEach((light) => createMarker(googleMaps, light, light === nearest));
+    markersToShow.forEach((light) => createMarker(googleMaps, light, light === nearest));
 
     if (nearest) {
-      showNearestLightStatus(nearest);
+      const withinRadius = nearest.distance <= NEARBY_RADIUS_METERS;
+      showNearestLightStatus(nearest, { withinRadius });
     } else if (lights.length === 0) {
       showNoLightsDataStatus();
     } else {
@@ -377,7 +393,7 @@ async function updateMapState(googleMaps, lights, { refitOnChange = false } = {}
     }
 
     if (refitOnChange) {
-      const points = [userLocation, ...lightsWithDistance];
+      const points = [userLocation, ...markersToShow];
       if (shouldRefitMap(googleMaps, points)) {
         fitMapToBounds(googleMaps, points);
       }
