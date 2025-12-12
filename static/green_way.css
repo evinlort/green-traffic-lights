@@ -99,3 +99,19 @@ body {
     min-height: 520px;
   }
 }
+
+.status--info {
+  color: var(--muted);
+}
+
+.status--success {
+  color: #34d399;
+}
+
+.status--warning {
+  color: #fbbf24;
+}
+
+.status--error {
+  color: #fb7185;
+}
