@@ -203,9 +203,11 @@ function shouldRefitMap(googleMaps, points) {
   const northEast = bounds.getNorthEast();
   const southWest = bounds.getSouthWest();
 
+  // Add a small tolerance around the current bounds to avoid refitting on tiny changes
   const latSpan = Math.abs(northEast.lat() - southWest.lat());
   const lngSpan = Math.abs(northEast.lng() - southWest.lng());
 
+  // 10% of current span, with a minimum padding to handle very tight zoom levels
   const latPadding = Math.max(latSpan * 0.1, 0.0005);
   const lngPadding = Math.max(lngSpan * 0.1, 0.0005);
 
