@@ -8,7 +8,9 @@ from typing import Any, Iterable, Optional, Tuple
 from flask import current_app
 
 DEFAULT_TRAFFIC_LIGHTS_FILENAME = "light_traffics.json"
-DEFAULT_DISTANCE_THRESHOLD_METERS = 75.0
+# Default to a 50 m radius to filter out only the nearest, directly visible lights
+# while still allowing legitimate remote activations.
+DEFAULT_DISTANCE_THRESHOLD_METERS = 50.0
 
 _TRAFFIC_LIGHTS: list[Tuple[float, float]] = []
 _TRAFFIC_LIGHTS_MTIME: Optional[float] = None
