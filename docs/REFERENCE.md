@@ -74,7 +74,7 @@ This document lists all public APIs, functions, and client components available 
 - **Purpose:** Validate how far a click is from known traffic lights.
 - **Configuration:**
   - `TRAFFIC_LIGHTS_FILE` – path to a JSON list of `{ "lat": number, "lon": number }` entries. Relative paths resolve from `current_app.root_path`. Defaults to `light_traffics.json`.
-  - `TRAFFIC_LIGHT_MAX_DISTANCE_METERS` – maximum allowed distance in meters (default `75.0`). Non‑finite or negative values fall back to the default.
+- `TRAFFIC_LIGHT_MAX_DISTANCE_METERS` – maximum allowed distance in meters (default `50.0`). Non‑finite or negative values fall back to the default.
 - **Public function:**
   - `validate_click_distance(lat: float, lon: float) -> Optional[Tuple[dict, int]]`
     - Loads and caches the traffic lights list (with mtime-based reloads).
@@ -97,7 +97,7 @@ This document lists all public APIs, functions, and client components available 
 - **Назначение:** Проверять расстояние клика до ближайшего светофора.
 - **Конфигурация:**
   - `TRAFFIC_LIGHTS_FILE` – путь к JSON-списку объектов `{ "lat": number, "lon": number }`. Относительные пути считаются от `current_app.root_path`. По умолчанию `light_traffics.json`.
-  - `TRAFFIC_LIGHT_MAX_DISTANCE_METERS` – максимально допустимое расстояние в метрах (по умолчанию `75.0`). Не‑числовые или отрицательные значения заменяются дефолтом.
+- `TRAFFIC_LIGHT_MAX_DISTANCE_METERS` – максимально допустимое расстояние в метрах (по умолчанию `50.0`). Не‑числовые или отрицательные значения заменяются дефолтом.
 - **Публичная функция:**
   - `validate_click_distance(lat: float, lon: float) -> Optional[Tuple[dict, int]]`
     - Загружает и кеширует список светофоров (перечитывает при изменении mtime).
