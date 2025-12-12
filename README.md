@@ -76,9 +76,17 @@ project/
 ├─ light_traffics.json
 ├─ requirements.txt
 └─ static/
-   ├─ index.html
-   ├─ styles.css
-   ├─ main.js
+   ├─ css/
+   │  ├─ green_way.css
+   │  ├─ privacy.css
+   │  └─ styles.css
+   ├─ html/
+   │  ├─ green_way.html
+   │  ├─ index.html
+   │  └─ privacy.html
+   ├─ js/
+   │  ├─ green_way.js
+   │  └─ main.js
    ├─ manifest.json
    ├─ service-worker.js
    └─ icons/

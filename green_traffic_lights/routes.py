@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import math
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
@@ -12,6 +13,7 @@ from .models import ClickEvent
 from .services.traffic_lights import _get_traffic_lights_path, validate_click_distance
 
 bp = Blueprint("routes", __name__)
+HTML_SUBDIR = "html"
 STATIC_IMMUTABLE_EXTS = (
     ".css",
     ".js",
@@ -37,18 +39,31 @@ def save_click_to_db(lat: float, lon: float, speed: Optional[float], timestamp: 
         raise
 
 
+def _get_html_dir() -> str:
+    return str(Path(current_app.static_folder) / HTML_SUBDIR)
+
+
 @bp.route("/")
+@bp.route("/index.html")
 def index() -> Any:
     """Serve the main PWA entry point from the static folder."""
 
-    return send_from_directory(current_app.static_folder, "index.html")
+    return send_from_directory(_get_html_dir(), "index.html")
 
 
 @bp.route("/green_way")
+@bp.route("/green_way.html")
 def green_way() -> Any:
     """Serve the dedicated Green Way map view."""
 
-    return send_from_directory(current_app.static_folder, "green_way.html")
+    return send_from_directory(_get_html_dir(), "green_way.html")
+
+
+@bp.route("/privacy.html")
+def privacy_policy() -> Any:
+    """Serve the privacy policy page."""
+
+    return send_from_directory(_get_html_dir(), "privacy.html")
 
 
 @bp.route("/light_traffics.json")
