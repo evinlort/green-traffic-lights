@@ -11,12 +11,17 @@ let mapInstance = null;
 let userMarker = null;
 let lightMarkers = [];
 let refreshIntervalId = null;
+let refreshInFlight = false;
+let refreshEnabled = false;
 
 function cleanupRefreshInterval() {
   if (refreshIntervalId !== null) {
-    clearInterval(refreshIntervalId);
+    clearTimeout(refreshIntervalId);
     refreshIntervalId = null;
   }
+
+  refreshInFlight = false;
+  refreshEnabled = false;
 }
 
 function setStatus(target, text, state = 'info') {
@@ -352,10 +357,22 @@ async function initGreenWay() {
     await updateMapState(googleMaps, lights, { refitOnChange: true });
 
     cleanupRefreshInterval();
-    refreshIntervalId = window.setInterval(
-      () => updateMapState(googleMaps, lights, { refitOnChange: true }),
-      5000,
-    );
+    refreshEnabled = true;
+    const runRefresh = async () => {
+      if (!refreshEnabled) return;
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        await updateMapState(googleMaps, lights, { refitOnChange: true });
+      } finally {
+        refreshInFlight = false;
+        if (refreshEnabled) {
+          refreshIntervalId = window.setTimeout(runRefresh, 5000);
+        }
+      }
+    };
+
+    refreshIntervalId = window.setTimeout(runRefresh, 5000);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка инициализации карты.';
     console.error('Ошибка в сценарии green_way:', error);
