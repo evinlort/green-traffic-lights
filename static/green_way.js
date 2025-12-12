@@ -1,18 +1,25 @@
+const NEARBY_RADIUS_METERS = 5000;
+const NEARBY_RADIUS_TEXT =
+  NEARBY_RADIUS_METERS % 1000 === 0
+    ? `${NEARBY_RADIUS_METERS / 1000} км`
+    : `${NEARBY_RADIUS_METERS} м`;
 const distanceText = document.getElementById('distance-text');
 const mapStatus = document.getElementById('map-status');
 const mapContainer = document.getElementById('map');
+
 let mapInstance = null;
 let userMarker = null;
+let lightMarkers = [];
 
-function updateDistanceText(text) {
-  if (distanceText) {
-    distanceText.textContent = text;
-  }
-}
+function setStatus(target, text, state = 'info') {
+  if (!target) return;
 
-function updateMapStatus(text) {
-  if (mapStatus) {
-    mapStatus.textContent = text;
+  target.textContent = text;
+  Array.from(target.classList)
+    .filter((className) => className.startsWith('status--'))
+    .forEach((className) => target.classList.remove(className));
+  if (state) {
+    target.classList.add(`status--${state}`);
   }
 }
 
@@ -80,8 +87,7 @@ async function fetchTrafficLights() {
     .map((item) => ({
       lat: Number.parseFloat(item.lat),
       lon: Number.parseFloat(item.lon),
-      label:
-        (item.LightNumber ?? item.LightNumbe)?.toString().trim() || 'Светофор (ID отсутствует)',
+      label: (item.LightNumber ?? item.LightNumbe)?.toString().trim() || 'Светофор (ID отсутствует)',
     }))
     .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lon));
 }
@@ -89,13 +95,15 @@ async function fetchTrafficLights() {
 function placeUserMarker(googleMaps, position) {
   if (!mapInstance) return;
 
+  const markerPosition = { lat: position.lat, lng: position.lon };
+
   if (userMarker) {
-    userMarker.setPosition(position);
+    userMarker.setPosition(markerPosition);
     return;
   }
 
   userMarker = new googleMaps.Marker({
-    position,
+    position: markerPosition,
     map: mapInstance,
     title: 'Ваше местоположение',
     icon: {
@@ -109,44 +117,88 @@ function placeUserMarker(googleMaps, position) {
   });
 }
 
-function renderTrafficLightMarkers(googleMaps, lights) {
-  if (!mapInstance) return;
-
-  lights.forEach((light) => {
-    new googleMaps.Marker({
-      position: { lat: light.lat, lng: light.lon },
-      map: mapInstance,
-      title: `Светофор ${light.label}`,
-      icon: {
-        path: googleMaps.SymbolPath.BACKWARD_CLOSED_ARROW,
-        scale: 4,
-        fillColor: '#fbbf24',
-        fillOpacity: 1,
-        strokeColor: '#1f2937',
-        strokeWeight: 1,
-      },
-      ariaLabel: `Светофор ${light.label}`,
-    });
-  });
+function clearLightMarkers() {
+  lightMarkers.forEach((marker) => marker.setMap(null));
+  lightMarkers = [];
 }
 
-function findNearestLight(userPosition, lights) {
-  let nearest = null;
-  let bestDistance = Number.POSITIVE_INFINITY;
+function createMarker(googleMaps, light, isHighlighted = false) {
+  const baseIcon = {
+    path: googleMaps.SymbolPath.BACKWARD_CLOSED_ARROW,
+    fillOpacity: 1,
+  };
 
-  lights.forEach((light) => {
-    const distance = haversineDistanceMeters(
-      { lat: userPosition.lat, lon: userPosition.lng },
-      { lat: light.lat, lon: light.lon },
-    );
+  const icon = isHighlighted
+    ? {
+        ...baseIcon,
+        scale: 6,
+        fillColor: '#22c55e',
+        strokeColor: '#064e3b',
+        strokeWeight: 2,
+      }
+    : {
+        ...baseIcon,
+        scale: 4,
+        fillColor: '#fbbf24',
+        strokeColor: '#1f2937',
+        strokeWeight: 1,
+      };
 
-    if (distance > 0 && distance < bestDistance) {
-      bestDistance = distance;
-      nearest = { ...light, distance };
+  const marker = new googleMaps.Marker({
+    position: { lat: light.lat, lng: light.lon },
+    map: mapInstance,
+    title: `Светофор ${light.label}`,
+    icon,
+    zIndex: isHighlighted ? 20 : 5,
+    animation: isHighlighted ? googleMaps.Animation.DROP : null,
+    ariaLabel: `Светофор ${light.label}`,
+  });
+
+  lightMarkers.push(marker);
+  return marker;
+}
+
+function findNearestLight(lights) {
+  return lights.reduce(
+    (nearest, light) =>
+      light.distance > 0 && light.distance < (nearest?.distance ?? Infinity) ? light : nearest,
+    null,
+  );
+}
+
+function fitMapToBounds(googleMaps, points) {
+  if (!mapInstance || points.length === 0) return;
+
+  const bounds = new googleMaps.LatLngBounds();
+  points.forEach((point) => {
+    const lng = point.lon ?? point.lng;
+    if (Number.isFinite(point.lat) && Number.isFinite(lng)) {
+      bounds.extend({ lat: point.lat, lng });
     }
   });
 
-  return nearest;
+  if (!bounds.isEmpty()) {
+    mapInstance.fitBounds(bounds, { top: 24, bottom: 24, left: 24, right: 24 });
+  }
+}
+
+function showNearestLightStatus(nearest) {
+  setStatus(
+    distanceText,
+    `До ближайшего зелёного светофора: ${formatDistance(nearest.distance)}`,
+    'success',
+  );
+  setStatus(mapStatus, `Показаны светофоры в радиусе ${NEARBY_RADIUS_TEXT} от вас.`, 'success');
+}
+
+function showNoLightsDataStatus() {
+  setStatus(distanceText, 'Нет данных о светофорах для расчёта расстояния.', 'warning');
+  setStatus(mapStatus, 'Добавьте точки светофоров в light_traffics.json.', 'warning');
+}
+
+function showNoNearbyLightsStatus() {
+  setStatus(distanceText, `Нет светофоров в радиусе ${NEARBY_RADIUS_TEXT}.`, 'warning');
+  setStatus(mapStatus, 'Попробуйте переместиться ближе к известным точкам.', 'warning');
 }
 
 function handleGeolocationError(error) {
@@ -160,59 +212,86 @@ function handleGeolocationError(error) {
     message = 'Запрос геолокации превысил время ожидания. Попробуйте ещё раз.';
   }
 
-  updateDistanceText(message);
-  updateMapStatus(message);
+  setStatus(distanceText, message, 'error');
+  setStatus(mapStatus, message, 'error');
+}
+
+function requestCurrentPosition(options) {
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(resolve, reject, options);
+  });
 }
 
 async function initGreenWay() {
   try {
+    if (!mapContainer) {
+      throw new Error('Контейнер карты не найден на странице.');
+    }
+
+    if (!navigator.geolocation) {
+      setStatus(distanceText, 'Браузер не поддерживает геолокацию.', 'error');
+      setStatus(mapStatus, 'Ваш браузер не поддерживает геолокацию.', 'error');
+      return;
+    }
+
+    setStatus(distanceText, 'Запрашиваем геолокацию…', 'info');
+    setStatus(mapStatus, 'Подготовка карты…', 'info');
+
     const apiKey = window.GOOGLE_MAPS_API_KEY || '';
     const [googleMaps, lights] = await Promise.all([
       loadGoogleMaps(apiKey),
       fetchTrafficLights(),
     ]);
 
-    if (!navigator.geolocation) {
-      updateDistanceText('Браузер не поддерживает геолокацию.');
+    let position;
+    try {
+      position = await requestCurrentPosition({ enableHighAccuracy: true, timeout: 12000, maximumAge: 0 });
+    } catch (geoError) {
+      handleGeolocationError(geoError);
       return;
     }
+    const { latitude, longitude } = position.coords;
+    const userLocation = { lat: latitude, lon: longitude };
 
-    if (!mapContainer) {
-      throw new Error('Контейнер карты не найден на странице.');
+    mapInstance = new googleMaps.Map(mapContainer, {
+      center: { lat: userLocation.lat, lng: userLocation.lon },
+      zoom: 15,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: false,
+    });
+
+    placeUserMarker(googleMaps, userLocation);
+
+    const lightsWithDistance = lights
+      .map((light) => ({
+        ...light,
+        distance: haversineDistanceMeters(
+          { lat: userLocation.lat, lon: userLocation.lon },
+          { lat: light.lat, lon: light.lon },
+        ),
+      }))
+      .filter((light) => Number.isFinite(light.distance) && light.distance <= NEARBY_RADIUS_METERS && light.distance > 0);
+
+    const nearest = findNearestLight(lightsWithDistance);
+
+    clearLightMarkers();
+    lightsWithDistance.forEach((light) => createMarker(googleMaps, light, light === nearest));
+
+    if (nearest) {
+      showNearestLightStatus(nearest);
+    } else if (lights.length === 0) {
+      showNoLightsDataStatus();
+    } else {
+      showNoNearbyLightsStatus();
     }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        const center = { lat: latitude, lng: longitude };
-
-        mapInstance = new googleMaps.Map(mapContainer, {
-          center,
-          zoom: 15,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: false,
-        });
-
-        placeUserMarker(googleMaps, center);
-        renderTrafficLightMarkers(googleMaps, lights);
-
-        const nearest = findNearestLight(center, lights);
-        if (nearest) {
-          updateDistanceText(`До ближайшего зелёного светофора: ${formatDistance(nearest.distance)}`);
-          updateMapStatus('Маршрут построен по вашему текущему местоположению.');
-        } else {
-          updateDistanceText('Нет данных о светофорах для расчёта расстояния.');
-          updateMapStatus('Добавьте точки светофоров в light_traffics.json.');
-        }
-      },
-      handleGeolocationError,
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 },
-    );
+    fitMapToBounds(googleMaps, [userLocation, ...lightsWithDistance]);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Ошибка инициализации карты.';
-    updateDistanceText(message);
-    updateMapStatus(message);
+    console.error('Ошибка в сценарии green_way:', error);
+    setStatus(distanceText, message, 'error');
+    setStatus(mapStatus, message, 'error');
   }
 }
 
