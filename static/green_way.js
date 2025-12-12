@@ -47,7 +47,9 @@ async function loadGoogleMaps(apiKey) {
   }
 
   if (!apiKey) {
-    throw new Error('Отсутствует ключ API Google Maps. Добавьте его в maps-config.js.');
+    throw new Error(
+      'Отсутствует ключ API Google Maps. Установите GOOGLE_MAPS_API_KEY перед запуском приложения.',
+    );
   }
 
   return new Promise((resolve, reject) => {
@@ -78,7 +80,8 @@ async function fetchTrafficLights() {
     .map((item) => ({
       lat: Number.parseFloat(item.lat),
       lon: Number.parseFloat(item.lon),
-      label: item.LightNumbe || 'Светофор',
+      label:
+        (item.LightNumber ?? item.LightNumbe)?.toString().trim() || 'Светофор (ID отсутствует)',
     }))
     .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lon));
 }
