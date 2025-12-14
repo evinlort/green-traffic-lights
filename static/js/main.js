@@ -50,11 +50,13 @@ const BASE_INTERVAL_MS = 5000;
 const POSITION_HISTORY_LIMIT = 3;
 const SPEED_DROP_THRESHOLD_KMH = 5; // minimum drop to mark red
 
-let trafficLights = [];
-let positionHistory = [];
-let pollingTimeoutId = null;
-let isTracking = false;
-let previousAverageSpeed = null;
+const trackingSession = {
+  isTracking: false,
+  trafficLights: [],
+  positionHistory: [],
+  pollingTimeoutId: null,
+  previousAverageSpeed: null,
+};
 
 function toRadians(degrees) {
   return degrees * (Math.PI / 180);
@@ -78,31 +80,34 @@ async function loadTrafficLights() {
     }
 
     const raw = await response.json();
-    trafficLights = raw
+    trackingSession.trafficLights = raw
       .map((item) => ({
         lat: Number.parseFloat(item.lat),
         lon: Number.parseFloat(item.lon),
       }))
       .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lon));
+    return trackingSession.trafficLights.length > 0;
   } catch (error) {
     console.error('Не удалось загрузить координаты светофоров', error);
-    trafficLights = [];
+    trackingSession.trafficLights = [];
+    return false;
   }
 }
 
 function getNearestLightDistance(lat, lon) {
-  if (!trafficLights.length) return null;
+  if (!trackingSession.trafficLights.length) return null;
 
-  return trafficLights.reduce((minDistance, light) => {
+  return trackingSession.trafficLights.reduce((minDistance, light) => {
     const distance = haversineDistanceMeters(lat, lon, light.lat, light.lon);
     return Math.min(minDistance, distance);
   }, Number.POSITIVE_INFINITY);
 }
 
 function addPositionToHistory(position) {
-  positionHistory.push(position);
-  if (positionHistory.length > POSITION_HISTORY_LIMIT) {
-    positionHistory = positionHistory.slice(-POSITION_HISTORY_LIMIT);
+  const history = trackingSession.positionHistory;
+  history.push(position);
+  if (history.length > POSITION_HISTORY_LIMIT) {
+    trackingSession.positionHistory = history.slice(-POSITION_HISTORY_LIMIT);
   }
 }
 
@@ -129,7 +134,7 @@ function computeAverageSpeedKmh(history) {
   return (totalDistance / totalTimeSeconds) * 3.6;
 }
 
-function determineState(distanceToLight, averageSpeed) {
+function determineState(distanceToLight, averageSpeed, previousAverageSpeed) {
   let state = 'tracking';
 
   if (distanceToLight != null && distanceToLight <= PASS_RADIUS && averageSpeed != null) {
@@ -137,11 +142,9 @@ function determineState(distanceToLight, averageSpeed) {
     state = speedDrop >= SPEED_DROP_THRESHOLD_KMH ? 'red' : 'green';
   }
 
-  if (averageSpeed != null) {
-    previousAverageSpeed = averageSpeed;
-  }
+  const nextPreviousAverageSpeed = averageSpeed != null ? averageSpeed : previousAverageSpeed;
 
-  return state;
+  return { state, nextPreviousAverageSpeed };
 }
 
 function calculateIntervalMs(distanceToLight) {
@@ -154,19 +157,19 @@ function calculateIntervalMs(distanceToLight) {
 }
 
 function stopTracking() {
-  if (pollingTimeoutId) {
-    clearTimeout(pollingTimeoutId);
-    pollingTimeoutId = null;
+  if (trackingSession.pollingTimeoutId) {
+    clearTimeout(trackingSession.pollingTimeoutId);
+    trackingSession.pollingTimeoutId = null;
   }
-  positionHistory = [];
-  previousAverageSpeed = null;
-  isTracking = false;
+  trackingSession.positionHistory = [];
+  trackingSession.previousAverageSpeed = null;
+  trackingSession.isTracking = false;
   setDisabled(false);
 }
 
 function scheduleNextPoll(distanceToLight) {
-  const nextInterval = calculateIntervalMs(distanceToLight ?? TRAFFIC_LIGHT_RADIUS);
-  pollingTimeoutId = setTimeout(() => {
+  const nextInterval = calculateIntervalMs(distanceToLight);
+  trackingSession.pollingTimeoutId = setTimeout(() => {
     navigator.geolocation.getCurrentPosition(handleSuccess, handleGeolocationError, {
       enableHighAccuracy: true,
       timeout: 10000,
@@ -216,7 +219,7 @@ async function sendPayload(payload) {
 }
 
 function handleSuccess(position) {
-  if (!isTracking) return;
+  if (!trackingSession.isTracking) return;
 
   const { latitude: lat, longitude: lon, speed } = position.coords;
   const timestampMs = position.timestamp;
@@ -231,9 +234,14 @@ function handleSuccess(position) {
 
   addPositionToHistory(point);
 
-  const averageSpeed = computeAverageSpeedKmh(positionHistory);
+  const averageSpeed = computeAverageSpeedKmh(trackingSession.positionHistory);
   const distanceToLight = getNearestLightDistance(lat, lon);
-  const state = determineState(distanceToLight, averageSpeed);
+  const { state, nextPreviousAverageSpeed } = determineState(
+    distanceToLight,
+    averageSpeed,
+    trackingSession.previousAverageSpeed,
+  );
+  trackingSession.previousAverageSpeed = nextPreviousAverageSpeed;
 
   const payload = {
     lat,
@@ -260,21 +268,32 @@ function handleClick() {
     return;
   }
 
-  if (isTracking) {
+  if (trackingSession.isTracking) {
     setStatus('Уже отслеживаем положение…', 'requesting');
     return;
   }
 
-  isTracking = true;
+  trackingSession.isTracking = true;
   setDisabled(true);
   setStatus('Запрашиваем геолокацию…', 'requesting');
-  loadTrafficLights().finally(() => {
-    navigator.geolocation.getCurrentPosition(handleSuccess, handleGeolocationError, {
-      enableHighAccuracy: true,
-      timeout: 10000,
-      maximumAge: 0,
+  loadTrafficLights()
+    .then((loaded) => {
+      if (!loaded) {
+        setStatus('Не удалось загрузить координаты светофоров. Попробуйте позже.', 'error');
+        stopTracking();
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(handleSuccess, handleGeolocationError, {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 0,
+      });
+    })
+    .catch(() => {
+      setStatus('Не удалось загрузить координаты светофоров. Попробуйте позже.', 'error');
+      stopTracking();
     });
-  });
 }
 
 if (button) {
