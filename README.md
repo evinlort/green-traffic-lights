@@ -70,8 +70,11 @@ project/
 │  ├─ extensions.py        # shared SQLAlchemy instance
 │  ├─ routes.py            # Flask blueprint and handlers
 │  ├─ models/
-│  │  └─ click_event.py    # ClickEvent model
+│  │  ├─ click_event.py          # ClickEvent model
+│  │  ├─ traffic_light_pass.py   # saved inferred passes per click
+│  │  └─ traffic_light_range.py  # aggregated red/green ranges per day
 │  └─ services/
+│     ├─ aggregation.py    # daily aggregation helpers
 │     └─ traffic_lights.py # distance validation helpers
 ├─ light_traffics.json
 ├─ requirements.txt
@@ -96,8 +99,13 @@ project/
 
 ## Notes
 - Static files for the PWA live under `static/` and are served from the app root.
-- The `/api/click` endpoint validates coordinates against nearby traffic lights and stores accepted clicks in the database.
+- The `/api/click` endpoint validates coordinates against nearby traffic lights, stores accepted clicks in the database, and can persist inferred traffic-light states (light identifier, pass color, speed profile, pass timestamp).
+- Aggregated red/green windows can be fetched via `GET /api/lights/<light_identifier>/ranges?day=YYYY-MM-DD` and produced with the CLI command `flask aggregate-passes --day YYYY-MM-DD` (defaults to the previous UTC day when omitted).
 - Configure the database URI or traffic lights file via environment variables (`DATABASE_URL`, `TRAFFIC_LIGHTS_FILE`).
+
+### Data aggregation
+- Aggregated red/green ranges are produced from saved passes using `green_traffic_lights.services.aggregation.aggregate_passes_for_day()`, which is designed for a daily job (defaults to the previous UTC day).
+- Use `green_traffic_lights.services.aggregation.get_ranges_for_light()` to fetch stored ranges for prediction logic.
 
 # Каркас PWA "Green Traffic Lights"
 
@@ -175,15 +183,26 @@ project/
 │  ├─ extensions.py        # общий экземпляр SQLAlchemy
 │  ├─ routes.py            # blueprint и обработчики Flask
 │  ├─ models/
-│  │  └─ click_event.py    # модель ClickEvent
+│  │  ├─ click_event.py          # модель ClickEvent
+│  │  ├─ traffic_light_pass.py   # сохранённые инференции проходов
+│  │  └─ traffic_light_range.py  # агрегированные интервалы по дням
 │  └─ services/
+│     ├─ aggregation.py    # хелперы суточной агрегации
 │     └─ traffic_lights.py # хелперы проверки расстояния
 ├─ light_traffics.json
 ├─ requirements.txt
 └─ static/
-   ├─ index.html
-   ├─ styles.css
-   ├─ main.js
+   ├─ css/
+   │  ├─ green_way.css
+   │  ├─ privacy.css
+   │  └─ styles.css
+   ├─ html/
+   │  ├─ green_way.html
+   │  ├─ index.html
+   │  └─ privacy.html
+   ├─ js/
+   │  ├─ green_way.js
+   │  └─ main.js
    ├─ manifest.json
    ├─ service-worker.js
    └─ icons/
@@ -192,6 +211,8 @@ project/
 ```
 
 ## Примечания
-- Статические файлы сейчас содержат только комментарии-заглушки.
-- Конечная точка `/api/click` возвращает заглушку JSON, пока не будет добавлена бизнес-логика.
+- Статические файлы для PWA лежат в `static/` и отдаются из корня приложения.
+- Конечная точка `/api/click` валидирует координаты относительно ближайших светофоров, сохраняет клики в БД и при необходимости сохраняет инференцию состояния светофора (идентификатор, цвет, профиль скорости, время прохода).
+- Агрегированные интервалы красного/зелёного доступны через `GET /api/lights/<light_identifier>/ranges?day=YYYY-MM-DD` и формируются CLI-командой `flask aggregate-passes --day YYYY-MM-DD` (по умолчанию — предыдущий день по UTC).
+- Настройте URI базы данных или путь к файлу светофоров через переменные окружения (`DATABASE_URL`, `TRAFFIC_LIGHTS_FILE`).
 - Файлы иконок представлены текстом-заглушкой (не бинарные), поэтому их можно заменить реальными PNG-ассетами при необходимости.

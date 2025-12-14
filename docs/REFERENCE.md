@@ -10,6 +10,7 @@ This document lists all public APIs, functions, and client components available 
   - Settings from `green_traffic_lights.config.Config`, including `SQLALCHEMY_DATABASE_URI` (env `DATABASE_URL` or `sqlite:///greenlights.db`), `SQLALCHEMY_TRACK_MODIFICATIONS=False`, and `SEND_FILE_MAX_AGE_DEFAULT=30 days`.
 - The application registers the routes blueprint from `green_traffic_lights/routes.py`, initializes the database via the shared `db` extension, and enables compression.
 - **Running:** `flask --app app run --host 0.0.0.0 --port 8000` or `gunicorn --bind 0.0.0.0:8000 app:app` (both create the app via `create_app()`).
+- **CLI command:** `flask aggregate-passes --day YYYY-MM-DD` aggregates stored traffic light passes into red/green ranges for the given UTC day (defaults to the previous day when omitted).
 
 ### Русский
 - **`create_app()`** – фабрика, настраивающая приложение Flask:
@@ -17,6 +18,7 @@ This document lists all public APIs, functions, and client components available 
   - Конфигурация из `green_traffic_lights.config.Config`, включая `SQLALCHEMY_DATABASE_URI` (переменная `DATABASE_URL` или `sqlite:///greenlights.db`), `SQLALCHEMY_TRACK_MODIFICATIONS=False` и `SEND_FILE_MAX_AGE_DEFAULT=30 дней`.
 - Приложение регистрирует blueprint маршрутов из `green_traffic_lights/routes.py`, инициализирует базу через общее расширение `db` и включает сжатие.
 - **Запуск:** `flask --app app run --host 0.0.0.0 --port 8000` или `gunicorn --bind 0.0.0.0:8000 app:app` (обе команды создают приложение через `create_app()`).
+- **CLI-команда:** `flask aggregate-passes --day YYYY-MM-DD` агрегирует сохранённые проходы по светофорам в интервалы красного/зелёного за указанный день по UTC (по умолчанию — предыдущий день).
 
 ## Database helper (`green_traffic_lights/extensions.py`)
 
@@ -106,11 +108,18 @@ This document lists all public APIs, functions, and client components available 
       "lat": 55.75,
       "lon": 37.61,
       "speed": 42.3,        // optional, km/h
-      "timestamp": "2024-01-01T12:00:00Z"
+      "timestamp": "2024-01-01T12:00:00Z",
+      "inferred_state": {   // optional inferred pass details from the client
+        "light_id": "48",
+        "color": "green",  // or "red"
+        "speed_profile": [32.1, 28.4, 30.0],
+        "pass_timestamp": "2024-01-01T12:00:05Z"
+      }
     }
     ```
   - **Validation:**
     - Ensures numeric `lat`/`lon`, optional numeric `speed`, ISO 8601 `timestamp` with timezone.
+    - Optional `inferred_state` must include a light identifier, `color` of `green`/`red`, a JSON-serializable `speed_profile`, and a timezone-aware `pass_timestamp`.
     - Calls `validate_click_distance`; if the click is too far, returns 400 with `{ "error": <message>, "details": {"distance_m": <float>} }`.
   - **Responses:**
     - `200 OK` with `{ "status": "ok" }` on success.
@@ -121,7 +130,15 @@ This document lists all public APIs, functions, and client components available 
       -H "Content-Type: application/json" \
       -d '{"lat":55.75,"lon":37.61,"timestamp":"2024-01-01T12:00:00Z"}'
     ```
-- **Helper:** `save_click_to_db(lat, lon, speed, timestamp)` – creates and commits a `ClickEvent` record.
+  - **Helper:** `save_click_to_db(lat, lon, speed, timestamp, inferred_pass=None)` – creates and commits a `ClickEvent` record and optionally a linked `TrafficLightPass`.
+- **`api_light_ranges(light_identifier)`** – `GET /api/lights/<light_identifier>/ranges` returns aggregated ranges for a specific light.
+  - **Query params:** `day` optional (`YYYY-MM-DD`, UTC). Defaults to the current UTC date.
+  - **Response:** `{ "light_identifier": "48", "ranges": [{ "color": "green", "start_time": "2024-01-01T12:00:05+00:00", "end_time": "2024-01-01T12:00:30+00:00", "day": "2024-01-01" }] }`.
+
+### Aggregation (`green_traffic_lights/services/aggregation.py`)
+
+- **`aggregate_passes_for_day(target_day=None)`** – aggregates saved `TrafficLightPass` rows into consolidated `TrafficLightRange` windows for the previous UTC day by default; reruns replace existing data for idempotency.
+- **`get_ranges_for_light(light_identifier, day=None)`** – returns stored aggregated ranges for a specific light and day (defaults to today) ordered by start time.
 
 ### Русский
 - **Blueprint `bp`** – подключён к корню.
@@ -133,11 +150,18 @@ This document lists all public APIs, functions, and client components available 
       "lat": 55.75,
       "lon": 37.61,
       "speed": 42.3,        // опционально, км/ч
-      "timestamp": "2024-01-01T12:00:00Z"
+      "timestamp": "2024-01-01T12:00:00Z",
+      "inferred_state": {   // опциональная инференция состояния светофора
+        "light_id": "48",
+        "color": "green",  // или "red"
+        "speed_profile": [32.1, 28.4, 30.0],
+        "pass_timestamp": "2024-01-01T12:00:05Z"
+      }
     }
     ```
   - **Валидация:**
     - Проверка числовых `lat`/`lon`, опциональной числовой `speed`, ISO 8601 `timestamp` с таймзоной.
+    - Опциональный блок `inferred_state` должен содержать идентификатор светофора, `color` со значением `green`/`red`, JSON-сериализуемый `speed_profile` и `pass_timestamp` с таймзоной.
     - Вызов `validate_click_distance`; при большом расстоянии возвращает 400 с `{ "error": <текст>, "details": {"distance_m": <float>} }`.
   - **Ответы:**
     - `200 OK` с `{ "status": "ok" }` при успехе.
@@ -148,7 +172,15 @@ This document lists all public APIs, functions, and client components available 
       -H "Content-Type: application/json" \
       -d '{"lat":55.75,"lon":37.61,"timestamp":"2024-01-01T12:00:00Z"}'
     ```
-- **Вспомогательная функция:** `save_click_to_db(lat, lon, speed, timestamp)` – создаёт и фиксирует запись `ClickEvent`.
+- **Вспомогательная функция:** `save_click_to_db(lat, lon, speed, timestamp, inferred_pass=None)` – создаёт и фиксирует запись `ClickEvent`, а при наличии инференции — связанную `TrafficLightPass`.
+- **`api_light_ranges(light_identifier)`** – `GET /api/lights/<light_identifier>/ranges` возвращает агрегированные интервалы для конкретного светофора.
+  - **Параметры запроса:** `day` опциональный (`YYYY-MM-DD`, UTC). По умолчанию — текущий день по UTC.
+  - **Ответ:** `{ "light_identifier": "48", "ranges": [{ "color": "green", "start_time": "2024-01-01T12:00:05+00:00", "end_time": "2024-01-01T12:00:30+00:00", "day": "2024-01-01" }] }`.
+
+### Агрегация (`green_traffic_lights/services/aggregation.py`)
+
+- **`aggregate_passes_for_day(target_day=None)`** – агрегирует сохранённые `TrafficLightPass` за предыдущий день (по умолчанию) в интервалы `TrafficLightRange`; повторные запуски перезаписывают данные за выбранную дату.
+- **`get_ranges_for_light(light_identifier, day=None)`** – возвращает сохранённые интервалы для указанного светофора и дня (по умолчанию – текущая дата), отсортированные по началу.
 
 ## Front-end components (`static/`)
 

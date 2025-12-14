@@ -2,14 +2,16 @@ from __future__ import annotations
 
 import json
 import math
-from datetime import datetime, timezone
+from dataclasses import dataclass
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
 from .extensions import db
-from .models import ClickEvent
+from .models import ClickEvent, TrafficLightPass
+from .services.aggregation import get_ranges_for_light
 from .services.traffic_lights import _get_traffic_lights_path, validate_click_distance
 
 bp = Blueprint("routes", __name__)
@@ -26,11 +28,93 @@ STATIC_IMMUTABLE_EXTS = (
 )
 
 
-def save_click_to_db(lat: float, lon: float, speed: Optional[float], timestamp: datetime) -> None:
-    """Persist click data to the configured database."""
+@dataclass
+class InferredPassData:
+    light_identifier: str
+    pass_color: str
+    speed_profile: Any
+    pass_timestamp: datetime
+
+
+def _parse_iso_timestamp(timestamp_raw: str) -> Optional[datetime]:
+    try:
+        timestamp_clean = timestamp_raw.replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(timestamp_clean)
+        if parsed.tzinfo is None:
+            raise ValueError("Timestamp must be timezone aware")
+        return parsed.astimezone(timezone.utc)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _parse_iso_date(date_raw: str) -> Optional[date]:
+    try:
+        return datetime.strptime(date_raw, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_inferred_pass(data: Any) -> tuple[Optional[InferredPassData], Optional[tuple[dict[str, str], int]]]:
+    if data is None:
+        return None, None
+
+    if not isinstance(data, dict):
+        return None, ({"error": "Invalid inferred_state payload"}, 400)
+
+    light_identifier_raw = data.get("light_id") or data.get("light_identifier") or data.get("light_number")
+    light_identifier = str(light_identifier_raw).strip() if light_identifier_raw is not None else ""
+    if not light_identifier:
+        return None, ({"error": "Missing inferred light identifier"}, 400)
+
+    pass_color_raw = data.get("color")
+    pass_color = str(pass_color_raw).strip().lower() if isinstance(pass_color_raw, str) else None
+    if pass_color not in {"green", "red"}:
+        return None, ({"error": "Invalid inferred pass color"}, 400)
+
+    speed_profile = data.get("speed_profile")
+    if speed_profile is not None and not isinstance(speed_profile, (dict, list, float, int, str)):
+        return None, ({"error": "Invalid speed_profile format"}, 400)
+
+    pass_timestamp_raw = data.get("pass_timestamp") or data.get("timestamp")
+    if not isinstance(pass_timestamp_raw, str):
+        return None, ({"error": "Invalid inferred pass timestamp"}, 400)
+
+    parsed_timestamp = _parse_iso_timestamp(pass_timestamp_raw)
+    if parsed_timestamp is None:
+        return None, ({"error": "Invalid inferred pass timestamp"}, 400)
+
+    inferred_pass = InferredPassData(
+        light_identifier=light_identifier,
+        pass_color=pass_color,
+        speed_profile=speed_profile,
+        pass_timestamp=parsed_timestamp,
+    )
+
+    return inferred_pass, None
+
+
+def save_click_to_db(
+    lat: float,
+    lon: float,
+    speed: Optional[float],
+    timestamp: datetime,
+    inferred_pass: Optional[InferredPassData] = None,
+) -> None:
+    """Persist click data and optional inferred pass details to the database."""
 
     click_event = ClickEvent(lat=lat, lon=lon, speed=speed, timestamp=timestamp)
     db.session.add(click_event)
+
+    if inferred_pass is not None:
+        traffic_pass = TrafficLightPass(
+            click_event=click_event,
+            light_identifier=inferred_pass.light_identifier,
+            pass_color=inferred_pass.pass_color,
+            speed_profile=inferred_pass.speed_profile,
+            pass_timestamp=inferred_pass.pass_timestamp,
+        )
+        db.session.add(traffic_pass)
+
     try:
         db.session.commit()
     except Exception:
@@ -109,6 +193,40 @@ def light_traffics() -> Any:
     return response
 
 
+@bp.route("/api/lights/<light_identifier>/ranges", methods=["GET"])
+def api_light_ranges(light_identifier: str) -> Any:
+    """Expose aggregated red/green ranges for a traffic light.
+
+    Query params:
+    - ``day`` (optional): UTC date in ``YYYY-MM-DD`` format; defaults to the
+      current UTC day if omitted.
+    """
+
+    day_param = request.args.get("day")
+    target_day: Optional[date] = None
+
+    if day_param:
+        parsed_day = _parse_iso_date(day_param)
+        if parsed_day is None:
+            return jsonify({"error": "Invalid day format; expected YYYY-MM-DD"}), 400
+        target_day = parsed_day
+
+    ranges = get_ranges_for_light(light_identifier.strip(), target_day)
+
+    payload = [
+        {
+            "light_identifier": range_.light_identifier,
+            "color": range_.color,
+            "start_time": range_.start_time.isoformat(),
+            "end_time": range_.end_time.isoformat(),
+            "day": range_.day.isoformat(),
+        }
+        for range_ in ranges
+    ]
+
+    return jsonify({"light_identifier": light_identifier, "ranges": payload})
+
+
 @bp.route("/maps-config.js")
 def maps_config() -> Any:
     """Expose the Google Maps API key without persisting it in the static files."""
@@ -158,21 +276,22 @@ def api_click() -> Any:
     if not isinstance(timestamp_raw := data.get("timestamp"), str):
         return jsonify({"error": "Invalid data format"}), 400
 
-    try:
-        timestamp_clean = timestamp_raw.replace("Z", "+00:00")
-        timestamp = datetime.fromisoformat(timestamp_clean)
-        if timestamp.tzinfo is None:
-            raise ValueError("Timestamp must be timezone aware")
-        timestamp = timestamp.astimezone(timezone.utc)
-    except (TypeError, ValueError):
+    timestamp = _parse_iso_timestamp(timestamp_raw)
+    if timestamp is None:
         return jsonify({"error": "Invalid data format"}), 400
+
+    inferred_pass_raw = data.get("inferred_state")
+    inferred_pass, inferred_error = _parse_inferred_pass(inferred_pass_raw)
+    if inferred_error is not None:
+        payload, status = inferred_error
+        return jsonify(payload), status
 
     validation_result = validate_click_distance(lat, lon)
     if validation_result is not None:
         payload, status = validation_result
         return jsonify(payload), status
 
-    save_click_to_db(lat, lon, speed, timestamp)
+    save_click_to_db(lat, lon, speed, timestamp, inferred_pass)
 
     return jsonify({"status": "ok"}), 200
 
