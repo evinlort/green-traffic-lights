@@ -41,7 +41,138 @@ function handleGeolocationError(error) {
   }
 
   setStatus(message, 'error');
+  stopTracking();
+}
+
+const TRAFFIC_LIGHT_RADIUS = 1000; // meters
+const PASS_RADIUS = 50; // meters around the light to evaluate pass state
+const BASE_INTERVAL_MS = 5000;
+const POSITION_HISTORY_LIMIT = 3;
+const SPEED_DROP_THRESHOLD_KMH = 5; // minimum drop to mark red
+
+let trafficLights = [];
+let positionHistory = [];
+let pollingTimeoutId = null;
+let isTracking = false;
+let previousAverageSpeed = null;
+
+function toRadians(degrees) {
+  return degrees * (Math.PI / 180);
+}
+
+function haversineDistanceMeters(lat1, lon1, lat2, lon2) {
+  const earthRadius = 6371e3;
+  const dLat = toRadians(lat2 - lat1);
+  const dLon = toRadians(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * Math.sin(dLon / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadius * c;
+}
+
+async function loadTrafficLights() {
+  try {
+    const response = await fetch('/light_traffics.json');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const raw = await response.json();
+    trafficLights = raw
+      .map((item) => ({
+        lat: Number.parseFloat(item.lat),
+        lon: Number.parseFloat(item.lon),
+      }))
+      .filter((item) => Number.isFinite(item.lat) && Number.isFinite(item.lon));
+  } catch (error) {
+    console.error('Не удалось загрузить координаты светофоров', error);
+    trafficLights = [];
+  }
+}
+
+function getNearestLightDistance(lat, lon) {
+  if (!trafficLights.length) return null;
+
+  return trafficLights.reduce((minDistance, light) => {
+    const distance = haversineDistanceMeters(lat, lon, light.lat, light.lon);
+    return Math.min(minDistance, distance);
+  }, Number.POSITIVE_INFINITY);
+}
+
+function addPositionToHistory(position) {
+  positionHistory.push(position);
+  if (positionHistory.length > POSITION_HISTORY_LIMIT) {
+    positionHistory = positionHistory.slice(-POSITION_HISTORY_LIMIT);
+  }
+}
+
+function computeAverageSpeedKmh(history) {
+  if (history.length < 2) {
+    return history[history.length - 1]?.speed ?? null;
+  }
+
+  let totalDistance = 0;
+  let totalTimeSeconds = 0;
+
+  for (let i = 1; i < history.length; i += 1) {
+    const prev = history[i - 1];
+    const current = history[i];
+    const distance = haversineDistanceMeters(prev.lat, prev.lon, current.lat, current.lon);
+    const timeDiffSeconds = (current.timestamp - prev.timestamp) / 1000;
+    if (timeDiffSeconds > 0) {
+      totalDistance += distance;
+      totalTimeSeconds += timeDiffSeconds;
+    }
+  }
+
+  if (totalTimeSeconds === 0) return null;
+  return (totalDistance / totalTimeSeconds) * 3.6;
+}
+
+function determineState(distanceToLight, averageSpeed) {
+  let state = 'tracking';
+
+  if (distanceToLight != null && distanceToLight <= PASS_RADIUS && averageSpeed != null) {
+    const speedDrop = previousAverageSpeed != null ? previousAverageSpeed - averageSpeed : 0;
+    state = speedDrop >= SPEED_DROP_THRESHOLD_KMH ? 'red' : 'green';
+  }
+
+  if (averageSpeed != null) {
+    previousAverageSpeed = averageSpeed;
+  }
+
+  return state;
+}
+
+function calculateIntervalMs(distanceToLight) {
+  if (distanceToLight == null) return BASE_INTERVAL_MS;
+
+  const adjustedDistance = Math.max(distanceToLight, 0);
+  const steps = Math.ceil(adjustedDistance / 100) || 1;
+  const intervalSeconds = Math.max(0.5, steps * 0.5);
+  return intervalSeconds * 1000;
+}
+
+function stopTracking() {
+  if (pollingTimeoutId) {
+    clearTimeout(pollingTimeoutId);
+    pollingTimeoutId = null;
+  }
+  positionHistory = [];
+  previousAverageSpeed = null;
+  isTracking = false;
   setDisabled(false);
+}
+
+function scheduleNextPoll(distanceToLight) {
+  const nextInterval = calculateIntervalMs(distanceToLight ?? TRAFFIC_LIGHT_RADIUS);
+  pollingTimeoutId = setTimeout(() => {
+    navigator.geolocation.getCurrentPosition(handleSuccess, handleGeolocationError, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0,
+    });
+  }, nextInterval);
 }
 
 async function sendPayload(payload) {
@@ -80,23 +211,47 @@ async function sendPayload(payload) {
         ? err.message
         : 'Не удалось отправить данные. Попробуйте ещё раз.';
     setStatus(message, 'error');
-  } finally {
-    setDisabled(false);
+    stopTracking();
   }
 }
 
 function handleSuccess(position) {
+  if (!isTracking) return;
+
   const { latitude: lat, longitude: lon, speed } = position.coords;
+  const timestampMs = position.timestamp;
   const speedKmh = Number.isFinite(speed) ? speed * 3.6 : null;
+
+  const point = {
+    lat,
+    lon,
+    speed: speedKmh,
+    timestamp: timestampMs,
+  };
+
+  addPositionToHistory(point);
+
+  const averageSpeed = computeAverageSpeedKmh(positionHistory);
+  const distanceToLight = getNearestLightDistance(lat, lon);
+  const state = determineState(distanceToLight, averageSpeed);
 
   const payload = {
     lat,
     lon,
-    speed: speedKmh,
-    timestamp: new Date().toISOString(),
+    speed: averageSpeed,
+    state,
+    timestamp: new Date(timestampMs).toISOString(),
   };
 
   sendPayload(payload);
+
+  const shouldContinue = distanceToLight == null || distanceToLight <= TRAFFIC_LIGHT_RADIUS;
+  if (shouldContinue) {
+    scheduleNextPoll(distanceToLight);
+  } else {
+    setStatus('Вы вне зоны ближайших светофоров. Нажмите, чтобы начать заново.', 'success');
+    stopTracking();
+  }
 }
 
 function handleClick() {
@@ -105,13 +260,20 @@ function handleClick() {
     return;
   }
 
+  if (isTracking) {
+    setStatus('Уже отслеживаем положение…', 'requesting');
+    return;
+  }
+
+  isTracking = true;
   setDisabled(true);
   setStatus('Запрашиваем геолокацию…', 'requesting');
-
-  navigator.geolocation.getCurrentPosition(handleSuccess, handleGeolocationError, {
-    enableHighAccuracy: true,
-    timeout: 10000,
-    maximumAge: 0,
+  loadTrafficLights().finally(() => {
+    navigator.geolocation.getCurrentPosition(handleSuccess, handleGeolocationError, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0,
+    });
   });
 }
 
