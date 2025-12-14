@@ -1,9 +1,9 @@
-const CACHE_NAME = 'green-light-static-v2';
+const CACHE_NAME = 'green-light-static-v3';
 const PRECACHE_URLS = [
   '/',
   '/index.html',
-  '/styles.css',
-  '/main.js',
+  '/css/styles.css',
+  '/js/main.js',
   '/manifest.json',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -36,6 +36,13 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  const url = new URL(request.url);
+
+  // Avoid intercepting cross-origin requests (e.g., Google Maps scripts).
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
   if (
     request.mode === 'navigate'
     || (request.headers.get('accept') || '').includes('text/html')
@@ -47,25 +54,27 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put('/index.html', copy));
           return networkResponse;
         })
-        .catch(() => caches.match('/index.html')),
+        .catch(async () => {
+          const cached = await caches.match('/index.html');
+          return cached || new Response('Offline', { status: 503, statusText: 'Offline' });
+        }),
     );
     return;
   }
 
   event.respondWith(
-    caches.open(CACHE_NAME).then((cache) =>
-      cache.match(request).then((cachedResponse) => {
-        const networkFetch = fetch(request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.ok) {
-              cache.put(request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-          .catch(() => cachedResponse);
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cachedResponse = await cache.match(request);
 
-        return cachedResponse || networkFetch;
-      }),
-    ),
+      try {
+        const networkResponse = await fetch(request);
+        if (networkResponse && networkResponse.ok) {
+          cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch {
+        return cachedResponse || new Response('Offline', { status: 503, statusText: 'Offline' });
+      }
+    }),
   );
 });

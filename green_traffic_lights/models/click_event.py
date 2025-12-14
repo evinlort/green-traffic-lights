@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from datetime import timezone
-
 from sqlalchemy import func
-from db import db
+from ..extensions import db
 
 
 class ClickEvent(db.Model):

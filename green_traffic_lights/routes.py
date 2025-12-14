@@ -1,16 +1,19 @@
 from __future__ import annotations
 
+import json
 import math
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Optional
 
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
-from db import db
-from models import ClickEvent
-from services.traffic_lights import validate_click_distance
+from .extensions import db
+from .models import ClickEvent
+from .services.traffic_lights import _get_traffic_lights_path, validate_click_distance
 
 bp = Blueprint("routes", __name__)
+HTML_SUBDIR = "html"
 STATIC_IMMUTABLE_EXTS = (
     ".css",
     ".js",
@@ -36,11 +39,87 @@ def save_click_to_db(lat: float, lon: float, speed: Optional[float], timestamp: 
         raise
 
 
+def _get_html_dir() -> str:
+    return str(Path(current_app.static_folder) / HTML_SUBDIR)
+
+
 @bp.route("/")
+@bp.route("/index.html")
 def index() -> Any:
     """Serve the main PWA entry point from the static folder."""
 
-    return send_from_directory(current_app.static_folder, "index.html")
+    return send_from_directory(_get_html_dir(), "index.html")
+
+
+@bp.route("/green_way")
+@bp.route("/green_way.html")
+def green_way() -> Any:
+    """Serve the dedicated Green Way map view."""
+
+    return send_from_directory(_get_html_dir(), "green_way.html")
+
+
+@bp.route("/privacy.html")
+def privacy_policy() -> Any:
+    """Serve the privacy policy page."""
+
+    return send_from_directory(_get_html_dir(), "privacy.html")
+
+
+@bp.route("/light_traffics.json")
+def light_traffics() -> Any:
+    """Serve the traffic lights coordinates JSON to the client.
+
+    The file is stored next to the Flask app (or at ``TRAFFIC_LIGHTS_FILE``) for
+    server-side validation, so expose it via an explicit route instead of the
+    static folder. When the file is missing or malformed, return an empty list
+    to keep the client map usable.
+    """
+
+    traffic_lights_file = _get_traffic_lights_path()
+
+    try:
+        raw_text = traffic_lights_file.read_text(encoding="utf-8")
+        raw_data = json.loads(raw_text)
+        if not isinstance(raw_data, list):
+            current_app.logger.warning(
+                "Traffic lights file does not contain a list: %s", traffic_lights_file
+            )
+            raw_data = []
+    except FileNotFoundError:
+        current_app.logger.warning(
+            "Traffic lights file not found for client: %s", traffic_lights_file
+        )
+        raw_data = []
+    except json.JSONDecodeError:
+        current_app.logger.warning(
+            "Traffic lights file contains invalid JSON for client: %s", traffic_lights_file
+        )
+        raw_data = []
+    except OSError:
+        current_app.logger.exception(
+            "Failed to read traffic lights file for client: %s", traffic_lights_file
+        )
+        raw_data = []
+
+    response = jsonify(raw_data)
+    response.cache_control.no_store = True
+    response.cache_control.no_cache = True
+    response.cache_control.max_age = 0
+    return response
+
+
+@bp.route("/maps-config.js")
+def maps_config() -> Any:
+    """Expose the Google Maps API key without persisting it in the static files."""
+
+    api_key = current_app.config.get("GOOGLE_MAPS_API_KEY", "")
+    payload = f"window.GOOGLE_MAPS_API_KEY = {json.dumps(api_key)};\n"
+
+    response = current_app.response_class(payload, mimetype="application/javascript")
+    response.cache_control.no_store = True
+    response.cache_control.max_age = 0
+    return response
 
 
 @bp.route("/api/click", methods=["POST"])

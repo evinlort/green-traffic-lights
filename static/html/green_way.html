@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Маршрут к зелёному светофору</title>
+  <link rel="stylesheet" href="/css/green_way.css">
+  <script src="/maps-config.js" defer></script>
+  <script src="/js/green_way.js" defer></script>
+</head>
+<body>
+  <header class="way-header" aria-live="polite" role="status">
+    <h1 class="way-title">Ближайший зелёный светофор</h1>
+    <p class="way-distance" id="distance-text">Определяем расстояние…</p>
+  </header>
+
+  <main class="way-layout">
+    <section class="map-wrapper" aria-label="Карта зелёных светофоров" role="region">
+      <div id="map" class="map" aria-label="Интерактивная карта" role="application"></div>
+      <p class="map-hint" id="map-status" aria-live="polite" role="status"></p>
+    </section>
+  </main>
+</body>
+</html>

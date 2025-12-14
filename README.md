@@ -60,29 +60,48 @@ This repository contains a minimal Flask scaffold for a Progressive Web App (PWA
 - Open `http://localhost:8000` in your browser.
 
 ## Project structure
+Core logic lives in the `green_traffic_lights/` package for easier navigation and reuse.
 ```
 project/
 ├─ app.py
+├─ green_traffic_lights/
+│  ├─ __init__.py          # create_app factory
+│  ├─ config.py            # default configuration values
+│  ├─ extensions.py        # shared SQLAlchemy instance
+│  ├─ routes.py            # Flask blueprint and handlers
+│  ├─ models/
+│  │  └─ click_event.py    # ClickEvent model
+│  └─ services/
+│     └─ traffic_lights.py # distance validation helpers
+├─ light_traffics.json
 ├─ requirements.txt
 └─ static/
-   ├─ index.html
-   ├─ styles.css
-   ├─ main.js
+   ├─ css/
+   │  ├─ green_way.css
+   │  ├─ privacy.css
+   │  └─ styles.css
+   ├─ html/
+   │  ├─ green_way.html
+   │  ├─ index.html
+   │  └─ privacy.html
+   ├─ js/
+   │  ├─ green_way.js
+   │  └─ main.js
    ├─ manifest.json
-      ├─ service-worker.js
-      └─ icons/
-         ├─ icon-192.png
-         └─ icon-512.png
+   ├─ service-worker.js
+   └─ icons/
+      ├─ icon-192.png
+      └─ icon-512.png
 ```
 
 ## Notes
-- The static files currently contain placeholder comments only.
-- The `/api/click` endpoint returns a placeholder JSON response until business logic is added.
-- Icon files are placeholder text (non-binary) so you can replace them with real PNG assets when ready.
+- Static files for the PWA live under `static/` and are served from the app root.
+- The `/api/click` endpoint validates coordinates against nearby traffic lights and stores accepted clicks in the database.
+- Configure the database URI or traffic lights file via environment variables (`DATABASE_URL`, `TRAFFIC_LIGHTS_FILE`).
 
 # Каркас PWA "Green Traffic Lights"
 
-Этот репозиторий содержит минимальный каркас Flask для прогрессивного веб-приложения (PWA). Он обслуживает статические ресурсы из каталога `static/` и предоставляет заглушку API по маршруту `/api/click` для будущих улучшений. Gunicorn включён для продакшн-подобного запуска.
+Этот репозиторий содержит минимальный каркас Flask для прогрессивного веб-приложения (PWA). Он обслуживает статические ресурсы из каталога `static/` и принимает клики через API `/api/click`, проверяя расстояние до ближайшего светофора и сохраняя данные. Gunicorn включён для продакшн-подобного запуска.
 
 ## Требования
 - Python 3.14 (или самая близкая доступная 3.x-версия для вашей платформы)
@@ -146,19 +165,30 @@ project/
 - Откройте в браузере `http://localhost:8000`.
 
 ## Структура проекта
+Основная логика вынесена в пакет `green_traffic_lights/`, чтобы код было проще читать и поддерживать.
 ```
 project/
 ├─ app.py
+├─ green_traffic_lights/
+│  ├─ __init__.py          # фабрика create_app
+│  ├─ config.py            # значения конфигурации по умолчанию
+│  ├─ extensions.py        # общий экземпляр SQLAlchemy
+│  ├─ routes.py            # blueprint и обработчики Flask
+│  ├─ models/
+│  │  └─ click_event.py    # модель ClickEvent
+│  └─ services/
+│     └─ traffic_lights.py # хелперы проверки расстояния
+├─ light_traffics.json
 ├─ requirements.txt
 └─ static/
    ├─ index.html
    ├─ styles.css
    ├─ main.js
    ├─ manifest.json
-      ├─ service-worker.js
-      └─ icons/
-         ├─ icon-192.png
-         └─ icon-512.png
+   ├─ service-worker.js
+   └─ icons/
+      ├─ icon-192.png
+      └─ icon-512.png
 ```
 
 ## Примечания

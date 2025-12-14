@@ -28,6 +28,30 @@ else
     exit 1
 end
 
+set config_file "$script_dir/../.config"
+if test -f $config_file
+    echo "Loading environment from $config_file"
+    for line in (string split -n '\n' (cat $config_file))
+        if test -z "$line"
+            continue
+        end
+        if string match -q '#*' $line
+            continue
+        end
+        set parts (string split -m1 '=' $line)
+        if test (count $parts) -lt 2
+            continue
+        end
+        set key $parts[1]
+        set value $parts[2]
+        if test -n "$key"
+            set -xg $key $value
+        end
+    end
+else
+    echo "Config file not found at $config_file"
+end
+
 set -x FLASK_APP app
 set port 8000
 echo "Starting Flask HTTPS (adhoc) on port $port"
