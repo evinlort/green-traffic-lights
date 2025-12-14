@@ -151,7 +151,7 @@ def _get_html_dir() -> str:
 def index() -> Any:
     """Serve the main PWA entry point from the static folder."""
 
-    return send_from_directory(_get_html_dir(), "index.html")
+    return send_from_directory(_get_html_dir(), "green_way.html")
 
 
 @bp.route("/green_way")
@@ -160,6 +160,14 @@ def green_way() -> Any:
     """Serve the dedicated Green Way map view."""
 
     return send_from_directory(_get_html_dir(), "green_way.html")
+
+
+@bp.route("/green_light")
+@bp.route("/green_light.html")
+def green_light() -> Any:
+    """Serve the classic Green Light button interface."""
+
+    return send_from_directory(_get_html_dir(), "green_light.html")
 
 
 @bp.route("/privacy.html")

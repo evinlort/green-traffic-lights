@@ -3,17 +3,26 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#0bcd3a">
-  <link rel="manifest" href="/manifest.json">
-  <link rel="stylesheet" href="/css/styles.css">
-  <title>Зелёный Светофор</title>
-  <script src="/js/main.js" defer></script>
+  <title>Маршрут к зелёному светофору</title>
+  <link rel="stylesheet" href="/css/green_way.css">
+  <script src="/maps-config.js" defer></script>
+  <script src="/js/green_way.js" defer></script>
 </head>
 <body>
-  <main class="app">
-    <h1 class="app-title">Зелёный Светофор</h1>
-    <button class="go-button" id="go-button" aria-label="Отправить сигнал о зелёном светофоре">Поехали</button>
-    <p id="status" class="status" role="status" aria-live="polite"></p>
+  <header class="way-header" aria-live="polite" role="status">
+    <h1 class="way-title">Ближайший зелёный светофор</h1>
+    <p class="way-distance" id="distance-text">Определяем расстояние…</p>
+    <div class="way-meta" role="status" aria-live="polite">
+      <p class="way-meta__item" id="movement-status">Анализируем движение…</p>
+      <p class="way-meta__item" id="speed-status">Скорость недоступна.</p>
+    </div>
+  </header>
+
+  <main class="way-layout">
+    <section class="map-wrapper" aria-label="Карта зелёных светофоров" role="region">
+      <div id="map" class="map" aria-label="Интерактивная карта" role="application"></div>
+      <p class="map-hint" id="map-status" aria-live="polite" role="status"></p>
+    </section>
   </main>
 </body>
 </html>
