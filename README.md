@@ -100,12 +100,12 @@ project/
 ## Notes
 - Static files for the PWA live under `static/` and are served from the app root.
 - The `/api/click` endpoint validates coordinates against nearby traffic lights, stores accepted clicks in the database, and can persist inferred traffic-light states (light identifier, pass color, speed profile, pass timestamp).
-- Aggregated red/green windows can be fetched via `GET /api/lights/<light_identifier>/ranges?day=YYYY-MM-DD` and produced with the CLI command `flask aggregate-passes --day YYYY-MM-DD` (defaults to the previous UTC day when omitted).
+- Aggregated red/green windows can be fetched via `GET /api/lights/<light_identifier>/ranges?day=YYYY-MM-DD` and produced with the CLI command `flask aggregate-passes --day YYYY-MM-DD` (defaults to the previous UTC day when omitted for both operations).
 - Configure the database URI or traffic lights file via environment variables (`DATABASE_URL`, `TRAFFIC_LIGHTS_FILE`).
 
 ### Data aggregation
 - Aggregated red/green ranges are produced from saved passes using `green_traffic_lights.services.aggregation.aggregate_passes_for_day()`, which is designed for a daily job (defaults to the previous UTC day).
-- Use `green_traffic_lights.services.aggregation.get_ranges_for_light()` to fetch stored ranges for prediction logic.
+- Use `green_traffic_lights.services.aggregation.get_ranges_for_light()` to fetch stored ranges for prediction logic (defaults to the previous UTC day).
 
 # Каркас PWA "Green Traffic Lights"
 

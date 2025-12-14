@@ -36,6 +36,15 @@ class InferredPassData:
     pass_timestamp: datetime
 
 
+class InferredPassError(Exception):
+    """Validation error for inferred pass payloads."""
+
+    def __init__(self, message: str, status: int = 400) -> None:
+        super().__init__(message)
+        self.payload = {"error": message}
+        self.status = status
+
+
 def _parse_iso_timestamp(timestamp_raw: str) -> Optional[datetime]:
     try:
         timestamp_clean = timestamp_raw.replace("Z", "+00:00")
@@ -54,43 +63,53 @@ def _parse_iso_date(date_raw: str) -> Optional[date]:
         return None
 
 
-def _parse_inferred_pass(data: Any) -> tuple[Optional[InferredPassData], Optional[tuple[dict[str, str], int]]]:
+def _ensure_json_safe(value: Any) -> Any:
+    """Validate that a value can be JSON-serialized (e.g., for DB JSON columns)."""
+
+    try:
+        json.dumps(value)
+    except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+        raise InferredPassError("Invalid speed_profile format") from exc
+    return value
+
+
+def _parse_inferred_pass(data: Any) -> Optional[InferredPassData]:
     if data is None:
-        return None, None
+        return None
 
     if not isinstance(data, dict):
-        return None, ({"error": "Invalid inferred_state payload"}, 400)
+        raise InferredPassError("Invalid inferred_state payload")
 
     light_identifier_raw = data.get("light_id") or data.get("light_identifier") or data.get("light_number")
     light_identifier = str(light_identifier_raw).strip() if light_identifier_raw is not None else ""
     if not light_identifier:
-        return None, ({"error": "Missing inferred light identifier"}, 400)
+        raise InferredPassError("Missing inferred light identifier")
 
     pass_color_raw = data.get("color")
     pass_color = str(pass_color_raw).strip().lower() if isinstance(pass_color_raw, str) else None
     if pass_color not in {"green", "red"}:
-        return None, ({"error": "Invalid inferred pass color"}, 400)
+        raise InferredPassError("Invalid inferred pass color")
 
     speed_profile = data.get("speed_profile")
     if speed_profile is not None and not isinstance(speed_profile, (dict, list, float, int, str)):
-        return None, ({"error": "Invalid speed_profile format"}, 400)
+        raise InferredPassError("Invalid speed_profile format")
+    if speed_profile is not None:
+        speed_profile = _ensure_json_safe(speed_profile)
 
     pass_timestamp_raw = data.get("pass_timestamp") or data.get("timestamp")
     if not isinstance(pass_timestamp_raw, str):
-        return None, ({"error": "Invalid inferred pass timestamp"}, 400)
+        raise InferredPassError("Invalid inferred pass timestamp")
 
     parsed_timestamp = _parse_iso_timestamp(pass_timestamp_raw)
     if parsed_timestamp is None:
-        return None, ({"error": "Invalid inferred pass timestamp"}, 400)
+        raise InferredPassError("Invalid inferred pass timestamp")
 
-    inferred_pass = InferredPassData(
+    return InferredPassData(
         light_identifier=light_identifier,
         pass_color=pass_color,
         speed_profile=speed_profile,
         pass_timestamp=parsed_timestamp,
     )
-
-    return inferred_pass, None
 
 
 def save_click_to_db(
@@ -199,7 +218,7 @@ def api_light_ranges(light_identifier: str) -> Any:
 
     Query params:
     - ``day`` (optional): UTC date in ``YYYY-MM-DD`` format; defaults to the
-      current UTC day if omitted.
+      previous UTC day if omitted to mirror aggregation defaults.
     """
 
     day_param = request.args.get("day")
@@ -211,7 +230,8 @@ def api_light_ranges(light_identifier: str) -> Any:
             return jsonify({"error": "Invalid day format; expected YYYY-MM-DD"}), 400
         target_day = parsed_day
 
-    ranges = get_ranges_for_light(light_identifier.strip(), target_day)
+    normalized_light_identifier = light_identifier.strip()
+    ranges = get_ranges_for_light(normalized_light_identifier, target_day)
 
     payload = [
         {
@@ -224,7 +244,7 @@ def api_light_ranges(light_identifier: str) -> Any:
         for range_ in ranges
     ]
 
-    return jsonify({"light_identifier": light_identifier, "ranges": payload})
+    return jsonify({"light_identifier": normalized_light_identifier, "ranges": payload})
 
 
 @bp.route("/maps-config.js")
@@ -280,11 +300,11 @@ def api_click() -> Any:
     if timestamp is None:
         return jsonify({"error": "Invalid data format"}), 400
 
-    inferred_pass_raw = data.get("inferred_state")
-    inferred_pass, inferred_error = _parse_inferred_pass(inferred_pass_raw)
-    if inferred_error is not None:
-        payload, status = inferred_error
-        return jsonify(payload), status
+    try:
+        inferred_pass_raw = data.get("inferred_state")
+        inferred_pass = _parse_inferred_pass(inferred_pass_raw)
+    except InferredPassError as exc:
+        return jsonify(exc.payload), exc.status
 
     validation_result = validate_click_distance(lat, lon)
     if validation_result is not None:

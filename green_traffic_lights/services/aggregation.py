@@ -74,7 +74,9 @@ def aggregate_passes_for_day(target_day: date | None = None) -> Sequence[Traffic
 
     # Clear existing data for the day to avoid stale ranges when re-running the
     # job.
-    TrafficLightRange.query.filter(TrafficLightRange.day == day).delete()
+    TrafficLightRange.query.filter(TrafficLightRange.day == day).delete(
+        synchronize_session=False
+    )
 
     ranges = _to_ranges(query, day)
     db.session.add_all(ranges)
@@ -88,9 +90,9 @@ def aggregate_passes_for_day(target_day: date | None = None) -> Sequence[Traffic
 
 
 def get_ranges_for_light(light_identifier: str, day: date | None = None) -> List[TrafficLightRange]:
-    """Fetch aggregated ranges for a specific light and day (defaults to today)."""
+    """Fetch aggregated ranges for a specific light and day (defaults to previous UTC day)."""
 
-    normalized_day = day or datetime.now(timezone.utc).date()
+    normalized_day = _normalize_day(day)
 
     return (
         TrafficLightRange.query.filter(

@@ -131,14 +131,14 @@ This document lists all public APIs, functions, and client components available 
       -d '{"lat":55.75,"lon":37.61,"timestamp":"2024-01-01T12:00:00Z"}'
     ```
   - **Helper:** `save_click_to_db(lat, lon, speed, timestamp, inferred_pass=None)` – creates and commits a `ClickEvent` record and optionally a linked `TrafficLightPass`.
-- **`api_light_ranges(light_identifier)`** – `GET /api/lights/<light_identifier>/ranges` returns aggregated ranges for a specific light.
-  - **Query params:** `day` optional (`YYYY-MM-DD`, UTC). Defaults to the current UTC date.
+  - **`api_light_ranges(light_identifier)`** – `GET /api/lights/<light_identifier>/ranges` returns aggregated ranges for a specific light.
+    - **Query params:** `day` optional (`YYYY-MM-DD`, UTC). Defaults to the previous UTC date to match aggregation.
   - **Response:** `{ "light_identifier": "48", "ranges": [{ "color": "green", "start_time": "2024-01-01T12:00:05+00:00", "end_time": "2024-01-01T12:00:30+00:00", "day": "2024-01-01" }] }`.
 
 ### Aggregation (`green_traffic_lights/services/aggregation.py`)
 
 - **`aggregate_passes_for_day(target_day=None)`** – aggregates saved `TrafficLightPass` rows into consolidated `TrafficLightRange` windows for the previous UTC day by default; reruns replace existing data for idempotency.
-- **`get_ranges_for_light(light_identifier, day=None)`** – returns stored aggregated ranges for a specific light and day (defaults to today) ordered by start time.
+- **`get_ranges_for_light(light_identifier, day=None)`** – returns stored aggregated ranges for a specific light and day (defaults to the previous UTC day to mirror aggregation) ordered by start time.
 
 ### Русский
 - **Blueprint `bp`** – подключён к корню.
@@ -173,14 +173,14 @@ This document lists all public APIs, functions, and client components available 
       -d '{"lat":55.75,"lon":37.61,"timestamp":"2024-01-01T12:00:00Z"}'
     ```
 - **Вспомогательная функция:** `save_click_to_db(lat, lon, speed, timestamp, inferred_pass=None)` – создаёт и фиксирует запись `ClickEvent`, а при наличии инференции — связанную `TrafficLightPass`.
-- **`api_light_ranges(light_identifier)`** – `GET /api/lights/<light_identifier>/ranges` возвращает агрегированные интервалы для конкретного светофора.
-  - **Параметры запроса:** `day` опциональный (`YYYY-MM-DD`, UTC). По умолчанию — текущий день по UTC.
+  - **`api_light_ranges(light_identifier)`** – `GET /api/lights/<light_identifier>/ranges` возвращает агрегированные интервалы для конкретного светофора.
+    - **Параметры запроса:** `day` опциональный (`YYYY-MM-DD`, UTC). По умолчанию — предыдущий день по UTC, чтобы совпадать с агрегацией.
   - **Ответ:** `{ "light_identifier": "48", "ranges": [{ "color": "green", "start_time": "2024-01-01T12:00:05+00:00", "end_time": "2024-01-01T12:00:30+00:00", "day": "2024-01-01" }] }`.
 
 ### Агрегация (`green_traffic_lights/services/aggregation.py`)
 
 - **`aggregate_passes_for_day(target_day=None)`** – агрегирует сохранённые `TrafficLightPass` за предыдущий день (по умолчанию) в интервалы `TrafficLightRange`; повторные запуски перезаписывают данные за выбранную дату.
-- **`get_ranges_for_light(light_identifier, day=None)`** – возвращает сохранённые интервалы для указанного светофора и дня (по умолчанию – текущая дата), отсортированные по началу.
+- **`get_ranges_for_light(light_identifier, day=None)`** – возвращает сохранённые интервалы для указанного светофора и дня (по умолчанию — предыдущий день по UTC, чтобы совпадать с агрегацией), отсортированные по началу.
 
 ## Front-end components (`static/`)
 
