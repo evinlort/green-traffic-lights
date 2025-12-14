@@ -150,6 +150,10 @@ function determineState(distanceToLight, averageSpeed, previousAverageSpeed) {
 function calculateIntervalMs(distanceToLight) {
   if (distanceToLight == null) return BASE_INTERVAL_MS;
 
+  if (distanceToLight > TRAFFIC_LIGHT_RADIUS) {
+    return BASE_INTERVAL_MS;
+  }
+
   const adjustedDistance = Math.max(distanceToLight, 0);
   const steps = Math.ceil(adjustedDistance / 100) || 1;
   const intervalSeconds = Math.max(0.5, steps * 0.5);
@@ -253,13 +257,7 @@ function handleSuccess(position) {
 
   sendPayload(payload);
 
-  const shouldContinue = distanceToLight == null || distanceToLight <= TRAFFIC_LIGHT_RADIUS;
-  if (shouldContinue) {
-    scheduleNextPoll(distanceToLight);
-  } else {
-    setStatus('Вы вне зоны ближайших светофоров. Нажмите, чтобы начать заново.', 'success');
-    stopTracking();
-  }
+  scheduleNextPoll(distanceToLight);
 }
 
 function handleClick() {
