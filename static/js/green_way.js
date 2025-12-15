@@ -5,6 +5,8 @@ const NEARBY_RADIUS_TEXT =
     : `${NEARBY_RADIUS_METERS} м`;
 const distanceText = document.getElementById('distance-text');
 const mapStatus = document.getElementById('map-status');
+const movementStatus = document.getElementById('movement-status');
+const speedStatus = document.getElementById('speed-status');
 const mapContainer = document.getElementById('map');
 
 let mapInstance = null;
@@ -15,6 +17,10 @@ let refreshInFlight = false;
 let refreshEnabled = false;
 let googleMapsApi = null;
 let latestLights = [];
+const positionHistory = [];
+
+const MAX_POSITION_SAMPLES = 6;
+const STOP_SPEED_THRESHOLD_MS = 0.6; // ~2.2 км/ч
 
 function cleanupRefreshInterval() {
   if (refreshIntervalId !== null) {
@@ -128,6 +134,47 @@ function formatDistance(meters) {
     return `${Math.round(meters)} м`;
   }
   return `${(meters / 1000).toFixed(2)} км`;
+}
+
+function addPositionToHistory(position) {
+  const timestamp = Number.isFinite(position.timestamp) ? position.timestamp : Date.now();
+  positionHistory.push({
+    lat: position.coords.latitude,
+    lon: position.coords.longitude,
+    timestamp,
+  });
+
+  if (positionHistory.length > MAX_POSITION_SAMPLES) {
+    positionHistory.shift();
+  }
+}
+
+function computeAverageSpeedMs() {
+  if (positionHistory.length < 2) return null;
+
+  let totalDistance = 0;
+  let totalTimeSeconds = 0;
+
+  for (let i = 1; i < positionHistory.length; i += 1) {
+    const prev = positionHistory[i - 1];
+    const curr = positionHistory[i];
+    const deltaSeconds = (curr.timestamp - prev.timestamp) / 1000;
+    if (!Number.isFinite(deltaSeconds) || deltaSeconds <= 0) continue;
+
+    const deltaDistance = haversineDistanceMeters(prev, curr);
+    if (!Number.isFinite(deltaDistance)) continue;
+
+    totalDistance += deltaDistance;
+    totalTimeSeconds += deltaSeconds;
+  }
+
+  if (totalTimeSeconds <= 0) return null;
+  return totalDistance / totalTimeSeconds;
+}
+
+function formatSpeedKmh(speedMs) {
+  if (!Number.isFinite(speedMs)) return '—';
+  return `${(speedMs * 3.6).toFixed(1)} км/ч`;
 }
 
 async function loadGoogleMaps(apiKey) {
@@ -320,6 +367,37 @@ function showNoNearbyLightsStatus() {
   setStatus(mapStatus, 'Попробуйте переместиться ближе к известным точкам.', 'warning');
 }
 
+function updateMovementStatus(nearest, { withinRadius, averageSpeedMs }) {
+  const speedText = `Средняя скорость: ${formatSpeedKmh(averageSpeedMs)}.`;
+
+  if (!nearest) {
+    setStatus(movementStatus, 'Недостаточно данных о светофорах для анализа движения.', 'warning');
+    setStatus(speedStatus, speedText, 'warning');
+    return;
+  }
+
+  if (!withinRadius) {
+    setStatus(movementStatus, 'Вы находитесь вне зоны ближайшего светофора.', 'info');
+    setStatus(speedStatus, speedText, 'info');
+    return;
+  }
+
+  if (!Number.isFinite(averageSpeedMs)) {
+    setStatus(movementStatus, 'Недостаточно данных, чтобы понять движение рядом со светофором.', 'warning');
+    setStatus(speedStatus, speedText, 'warning');
+    return;
+  }
+
+  const isStopped = averageSpeedMs <= STOP_SPEED_THRESHOLD_MS;
+  const state = isStopped ? 'error' : 'success';
+  const message = isStopped
+    ? 'У светофора: низкая скорость или остановка (КРАСНЫЙ).'
+    : 'У светофора: движение продолжается (ЗЕЛЁНЫЙ).';
+
+  setStatus(movementStatus, message, state);
+  setStatus(speedStatus, speedText, state);
+}
+
 function handleGeolocationError(error) {
   let message = 'Не удалось получить геолокацию. Разрешите доступ и попробуйте снова.';
 
@@ -354,6 +432,9 @@ async function updateMapState(googleMaps, lights, { refitOnChange = false } = {}
     const { latitude, longitude } = position.coords;
     const userLocation = { lat: latitude, lon: longitude };
 
+    addPositionToHistory(position);
+    const averageSpeedMs = computeAverageSpeedMs();
+
     placeUserMarker(googleMaps, userLocation);
 
     const lightsWithDistance = lights
@@ -383,14 +464,17 @@ async function updateMapState(googleMaps, lights, { refitOnChange = false } = {}
     clearLightMarkers();
     markersToShow.forEach((light) => createMarker(googleMaps, light, light === nearest));
 
+    const withinRadius = nearest ? nearest.distance <= NEARBY_RADIUS_METERS : false;
+
     if (nearest) {
-      const withinRadius = nearest.distance <= NEARBY_RADIUS_METERS;
       showNearestLightStatus(nearest, { withinRadius });
     } else if (lights.length === 0) {
       showNoLightsDataStatus();
     } else {
       showNoNearbyLightsStatus();
     }
+
+    updateMovementStatus(nearest, { withinRadius, averageSpeedMs });
 
     if (refitOnChange) {
       const points = [userLocation, ...markersToShow];
