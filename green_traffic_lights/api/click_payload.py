@@ -5,17 +5,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
+from .errors import PayloadError
 from .inferred_pass import InferredPassData, InferredPassError, InferredPassParser
-from .time_parsers import IsoParser
-
-
-class PayloadError(Exception):
-    """Standardized validation error for API requests."""
-
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.payload = {"error": message}
-        self.status = status
+from .time_parsers import IsoParser, parse_timestamp
 
 
 @dataclass
@@ -80,7 +72,7 @@ class ClickPayload:
         if not isinstance(timestamp_raw, str):
             raise PayloadError("Invalid data format")
 
-        parsed = IsoParser.parse_timestamp(timestamp_raw)
+        parsed = parse_timestamp(timestamp_raw)
         if parsed is None:
             raise PayloadError("Invalid data format")
 

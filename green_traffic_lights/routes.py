@@ -7,11 +7,16 @@ from typing import Any, Optional
 
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
-from .api.click_payload import ClickPayload, PayloadError
-from .api.time_parsers import IsoParser
+from .api.click_payload import ClickPayload
+from .api.errors import PayloadError
+from .api.time_parsers import parse_date
+from .extensions import db
 from .services.aggregation import get_ranges_for_light
 from .services.click_recorder import ClickRecorder
-from .services.traffic_light_assets import TrafficLightAssetLoader
+from .services.traffic_light_assets import (
+    build_traffic_light_response,
+    load_traffic_light_payload,
+)
 from .services.traffic_lights import validate_click_distance
 
 bp = Blueprint("routes", __name__)
@@ -67,8 +72,8 @@ def privacy_policy() -> Any:
 def light_traffics() -> Any:
     """Serve the traffic lights coordinates JSON to the client."""
 
-    raw_data = TrafficLightAssetLoader.load_json_payload()
-    return TrafficLightAssetLoader.make_response(raw_data)
+    raw_data = load_traffic_light_payload()
+    return build_traffic_light_response(raw_data)
 
 
 @bp.route("/api/lights/<light_identifier>/ranges", methods=["GET"])
@@ -84,7 +89,7 @@ def api_light_ranges(light_identifier: str) -> Any:
     target_day: Optional[date] = None
 
     if day_param:
-        parsed_day = IsoParser.parse_date(day_param)
+        parsed_day = parse_date(day_param)
         if parsed_day is None:
             return jsonify({"error": "Invalid day format; expected YYYY-MM-DD"}), 400
         target_day = parsed_day
@@ -133,7 +138,7 @@ def api_click() -> Any:
         validation_payload, status = validation_result
         return jsonify(validation_payload), status
 
-    ClickRecorder.save_click(
+    ClickRecorder(db.session, current_app.logger).save_click(
         payload.lat,
         payload.lon,
         payload.speed,

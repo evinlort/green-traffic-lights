@@ -5,7 +5,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
-from .time_parsers import IsoParser
+from .errors import PayloadError
+from .time_parsers import IsoParser, parse_timestamp
 
 
 @dataclass
@@ -16,13 +17,8 @@ class InferredPassData:
     pass_timestamp: datetime
 
 
-class InferredPassError(Exception):
+class InferredPassError(PayloadError):
     """Validation error for inferred pass payloads."""
-
-    def __init__(self, message: str, status: int = 400) -> None:
-        super().__init__(message)
-        self.payload = {"error": message}
-        self.status = status
 
 
 class InferredPassParser:
@@ -56,7 +52,7 @@ class InferredPassParser:
         if not isinstance(pass_timestamp_raw, str):
             raise InferredPassError("Invalid inferred pass timestamp")
 
-        parsed_timestamp = IsoParser.parse_timestamp(pass_timestamp_raw)
+        parsed_timestamp = parse_timestamp(pass_timestamp_raw)
         if parsed_timestamp is None:
             raise InferredPassError("Invalid inferred pass timestamp")
 
