@@ -186,7 +186,7 @@ async function sendPayload(payload) {
   setStatus('Отправляем данные…', 'sending');
 
   try {
-    const response = await fetch('/api/click', {
+    const response = await fetch('/api/green_light', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
