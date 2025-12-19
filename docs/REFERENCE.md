@@ -101,7 +101,7 @@ This document lists all public APIs, functions, and client components available 
 ### English
 - **Blueprint `bp`** – mounted at root.
 - **`index()`** – `GET /` serves `static/index.html` from the configured static folder.
-- **`api_click()`** – `POST /api/click` accepts geolocation payloads and persists them.
+- **`api_green_light()`** – `POST /api/green_light` accepts geolocation payloads and persists them.
   - **Request JSON:**
     ```json
     {
@@ -126,7 +126,7 @@ This document lists all public APIs, functions, and client components available 
     - `400 Bad Request` for missing/invalid fields or excessive distance.
   - **Example request:**
     ```bash
-    curl -X POST http://localhost:8000/api/click \
+    curl -X POST http://localhost:8000/api/green_light \
       -H "Content-Type: application/json" \
       -d '{"lat":55.75,"lon":37.61,"timestamp":"2024-01-01T12:00:00Z"}'
     ```
@@ -143,7 +143,7 @@ This document lists all public APIs, functions, and client components available 
 ### Русский
 - **Blueprint `bp`** – подключён к корню.
 - **`index()`** – `GET /` отдаёт `static/index.html` из настроенной статической папки.
-- **`api_click()`** – `POST /api/click` принимает геоданные и сохраняет их.
+- **`api_green_light()`** – `POST /api/green_light` принимает геоданные и сохраняет их.
   - **Тело запроса (JSON):**
     ```json
     {
@@ -168,7 +168,7 @@ This document lists all public APIs, functions, and client components available 
     - `400 Bad Request` при отсутствии/ошибке полей или превышении дистанции.
   - **Пример запроса:**
     ```bash
-    curl -X POST http://localhost:8000/api/click \
+    curl -X POST http://localhost:8000/api/green_light \
       -H "Content-Type: application/json" \
       -d '{"lat":55.75,"lon":37.61,"timestamp":"2024-01-01T12:00:00Z"}'
     ```
@@ -194,7 +194,7 @@ This document lists all public APIs, functions, and client components available 
   - Reads `#go-button` and `#status` elements.
   - Registers a service worker from `/service-worker.js` on window load.
   - On click, requests geolocation with high accuracy and 10s timeout; converts speed to km/h if available.
-  - Sends payload via `fetch('/api/click')`; displays success or error messages in Russian and toggles button state classes.
+  - Sends payload via `fetch('/api/green_light')`; displays success or error messages in Russian and toggles button state classes.
 - **Usage:** Open `http://localhost:8000/` and press the button to submit your current position. Ensure geolocation permissions are granted.
 
 ### Русский
@@ -207,7 +207,7 @@ This document lists all public APIs, functions, and client components available 
   - Находит элементы `#go-button` и `#status`.
   - Регистрирует service worker из `/service-worker.js` при загрузке окна.
   - По клику запрашивает геолокацию с высокой точностью и таймаутом 10 секунд; переводит скорость в км/ч при наличии.
-  - Отправляет данные через `fetch('/api/click')`; выводит сообщения об успехе или ошибке и переключает модификаторы кнопки.
+  - Отправляет данные через `fetch('/api/green_light')`; выводит сообщения об успехе или ошибке и переключает модификаторы кнопки.
 - **Использование:** Откройте `http://localhost:8000/` и нажмите кнопку, чтобы отправить текущие координаты. Убедитесь, что разрешён доступ к геолокации.
 
 ## Configuration recap / Итоги по настройкам
@@ -219,4 +219,3 @@ This document lists all public APIs, functions, and client components available 
 - Use `pip install -r requirements.txt` to install dependencies.
 - To inspect stored clicks, open a Python shell inside `flask shell` and query `ClickEvent.query.all()`.
 - To update traffic lights data, edit the JSON file referenced by `TRAFFIC_LIGHTS_FILE`; reloads happen automatically when the mtime changes.
-

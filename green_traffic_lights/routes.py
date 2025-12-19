@@ -124,9 +124,9 @@ def maps_config() -> Any:
     return response
 
 
-@bp.route("/api/click", methods=["POST"])
-def api_click() -> Any:
-    """Handle click events from the PWA client."""
+@bp.route("/api/green_light", methods=["POST"])
+def api_green_light() -> Any:
+    """Handle green light click events from the PWA client."""
 
     try:
         payload = ClickPayload.from_raw(request.get_json(silent=True))

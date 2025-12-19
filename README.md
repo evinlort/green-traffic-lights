@@ -1,6 +1,6 @@
 # Green Traffic Lights PWA Scaffold
 
-This repository contains a minimal Flask scaffold for a Progressive Web App (PWA). It serves static assets from the `static/` directory and exposes a placeholder API route at `/api/click` for future enhancements. Gunicorn is included for production-style serving.
+This repository contains a minimal Flask scaffold for a Progressive Web App (PWA). It serves static assets from the `static/` directory and exposes a placeholder API route at `/api/green_light` for future enhancements. Gunicorn is included for production-style serving.
 
 ## Requirements
 - Python 3.14 (or the nearest available 3.x version on your platform)
@@ -99,7 +99,7 @@ project/
 
 ## Notes
 - Static files for the PWA live under `static/` and are served from the app root.
-- The `/api/click` endpoint validates coordinates against nearby traffic lights, stores accepted clicks in the database, and can persist inferred traffic-light states (light identifier, pass color, speed profile, pass timestamp).
+- The `/api/green_light` endpoint validates coordinates against nearby traffic lights, stores accepted clicks in the database, and can persist inferred traffic-light states (light identifier, pass color, speed profile, pass timestamp).
 - Aggregated red/green windows can be fetched via `GET /api/lights/<light_identifier>/ranges?day=YYYY-MM-DD` and produced with the CLI command `flask aggregate-passes --day YYYY-MM-DD` (defaults to the previous UTC day when omitted for both operations).
 - Configure the database URI or traffic lights file via environment variables (`DATABASE_URL`, `TRAFFIC_LIGHTS_FILE`).
 
@@ -109,7 +109,7 @@ project/
 
 # Каркас PWA "Green Traffic Lights"
 
-Этот репозиторий содержит минимальный каркас Flask для прогрессивного веб-приложения (PWA). Он обслуживает статические ресурсы из каталога `static/` и принимает клики через API `/api/click`, проверяя расстояние до ближайшего светофора и сохраняя данные. Gunicorn включён для продакшн-подобного запуска.
+Этот репозиторий содержит минимальный каркас Flask для прогрессивного веб-приложения (PWA). Он обслуживает статические ресурсы из каталога `static/` и принимает клики через API `/api/green_light`, проверяя расстояние до ближайшего светофора и сохраняя данные. Gunicorn включён для продакшн-подобного запуска.
 
 ## Требования
 - Python 3.14 (или самая близкая доступная 3.x-версия для вашей платформы)
@@ -212,7 +212,7 @@ project/
 
 ## Примечания
 - Статические файлы для PWA лежат в `static/` и отдаются из корня приложения.
-- Конечная точка `/api/click` валидирует координаты относительно ближайших светофоров, сохраняет клики в БД и при необходимости сохраняет инференцию состояния светофора (идентификатор, цвет, профиль скорости, время прохода).
+- Конечная точка `/api/green_light` валидирует координаты относительно ближайших светофоров, сохраняет клики в БД и при необходимости сохраняет инференцию состояния светофора (идентификатор, цвет, профиль скорости, время прохода).
 - Агрегированные интервалы красного/зелёного доступны через `GET /api/lights/<light_identifier>/ranges?day=YYYY-MM-DD` и формируются CLI-командой `flask aggregate-passes --day YYYY-MM-DD` (по умолчанию — предыдущий день по UTC).
 - Настройте URI базы данных или путь к файлу светофоров через переменные окружения (`DATABASE_URL`, `TRAFFIC_LIGHTS_FILE`).
 - Файлы иконок представлены текстом-заглушкой (не бинарные), поэтому их можно заменить реальными PNG-ассетами при необходимости.
